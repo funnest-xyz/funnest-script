@@ -38,12 +38,28 @@ alert(ta.crossover(fast, slow), '{symbol} 골든크로스 {close}')
 
 ## AI와 쓰기
 
-- **ChatGPT · Claude 대화**: [`llms.txt`](https://funnest.xyz/scripts/llms.txt)를 주고 만들어 달라고 하세요.
-- **Claude Code · Cursor**: MCP 서버를 추가하고 말로 부탁하세요.
+| 어디서 | 쓰는 것 | 하는 일 |
+|---|---|---|
+| ChatGPT · Claude 대화창 | 앱의 **AI로 만들기** 버튼 | 설명서와 요청문을 복사해 줘요. 받은 코드를 붙여 넣으면 앱이 검사해요 |
+| Claude Code · Cursor 같은 AI 도구 | MCP 서버 + 스킬 | AI가 혼자 읽고, 짜고, 검사하고, 백테스트해요 |
+| 터미널 | CLI | 파일을 검사하고, 실제 시세로 돌리고, 백테스트해요 |
+
+- **대화창**: 대화창의 AI는 코드를 돌려 볼 수 없어요.
+  [Funnest](https://funnest.xyz/trade/) 스크립트 편집기에서 **AI로 만들기**를 누르면 설명서([`llms.txt`](https://funnest.xyz/scripts/llms.txt))와 요청문이 복사돼요.
+  대화창에 붙여 넣고 원하는 걸 적은 뒤, 받은 코드를 편집기에 붙여 넣으세요.
+  오류가 나면 **오류를 AI에 붙여 넣기**로 오류와 고치는 법을 넘겨요.
+- **AI 도구**: MCP 서버를 추가하고 말로 부탁하세요.
 
   ```sh
   claude mcp add funnest-script -- npx -y @funnest/script-mcp
   ```
+
+- **스킬**: 설명서가 아니라 일하는 순서와 요령이에요.
+  문서 읽기 → 짜기 → 검사 → 고치기 → 백테스트 순서와, 모델이 자주 틀리는 점이 들어 있어요.
+  Funnest Script 일을 할 때만 불러와져요.
+  MCP 서버와 함께 쓰세요. [`skills/funnest-script`](skills/funnest-script)를 에이전트의 스킬 폴더(Claude Code는 `~/.claude/skills/`)에 복사하면 돼요.
+
+자세한 건 [AI · CLI · MCP 문서](https://funnest.xyz/scripts/docs/ai/)에 있어요.
 
 ## 직접 돌려 보기
 

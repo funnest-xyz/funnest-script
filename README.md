@@ -42,12 +42,28 @@ alert(ta.crossover(fast, slow), '{symbol} golden cross at {close}')
 
 ## Use it with an AI assistant
 
-- **Chat (ChatGPT, Claude…)**: give it [`llms.txt`](https://funnest.xyz/scripts/llms.txt) and ask for a script.
-- **Claude Code / Cursor**: add the MCP server, then ask in plain words:
+| Where | Use | What happens |
+|---|---|---|
+| A chat (ChatGPT, Claude…) | The app's **Make it with AI** button | Copies the docs and a request; paste the code back and the app checks it |
+| AI tools (Claude Code, Cursor…) | MCP server + skill | The AI reads, writes, checks and backtests by itself |
+| Terminal | CLI | Check, run on real prices and backtest a file |
+
+- **Chat**: a chat AI can't run code. In the [Funnest](https://funnest.xyz/trade/) script editor,
+  **Make it with AI** copies the docs ([`llms.txt`](https://funnest.xyz/scripts/llms.txt)) and a request.
+  Paste it into the chat, say what you want, and paste the code you get back into the editor.
+  On an error, **Paste the error into an AI** hands over the error and how to fix it.
+- **AI tools**: add the MCP server, then ask in plain words:
 
   ```sh
   claude mcp add funnest-script -- npx -y @funnest/script-mcp
   ```
+
+- **Skill**: not more docs, but how to work: read the docs, write, check, fix, backtest, and the
+  mistakes models often make. It loads only for Funnest Script tasks. Use it with the MCP server:
+  copy [`skills/funnest-script`](skills/funnest-script) into your agent's skills folder
+  (for Claude Code, `~/.claude/skills/`).
+
+More in the [AI · CLI · MCP docs](https://funnest.xyz/en/scripts/docs/ai/).
 
 ## Run a script yourself
 
