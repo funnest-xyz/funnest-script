@@ -3,6 +3,8 @@
 #
 # One-time setup per package on npmjs.com → package → Settings → Trusted Publisher:
 #   GitHub Actions · organization funnest-xyz · repository funnest-script · workflow release.yml
+# If "npm publish" isn't allowed there (npm's safer default), the versions are staged instead and
+# wait on npmjs.com until a maintainer approves them with 2FA.
 #
 # Release: bump the versions in packages/*/package.json, commit, then
 #   git tag v0.1.0 && git push origin v0.1.0
