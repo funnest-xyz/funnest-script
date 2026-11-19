@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+*.log
+.DS_Store
+*.tsbuildinfo
+.release
+.env*
+.cache
+# The AI eval's runs (each one a record of model answers): kept locally, not in the repository.
+eval/results/
+# Claude Code personal settings
+.claude/settings.local.json

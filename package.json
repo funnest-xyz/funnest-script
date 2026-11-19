@@ -1,0 +1,32 @@
+{
+  "name": "funnest-script",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@10.10.0",
+  "scripts": {
+    "build": "pnpm --filter \"./packages/**\" build",
+    "generate": "pnpm --filter @funnest/script generate",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "eval": "node --conditions=funnest-source --import tsx packages/cli/src/eval-bin.ts",
+    "release": "node scripts/release.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "esbuild": "^0.28.2",
+    "tsup": "^9.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/funnest-xyz/funnest-script.git"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

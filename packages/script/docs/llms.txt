@@ -1,0 +1,446 @@
+# Funnest Script v2
+
+> The indicator and strategy language of Funnest (https://funnest.xyz/trade). A script is plain JavaScript that runs once over all bars of a chart, with the names below in scope. Reply with code only: one script, no explanations unless asked.
+
+## Rules
+
+1. Line 1 is //@version=2, then call indicator({ name, overlay }) once.
+2. A Series is an array with one value per bar: index 0 is the oldest bar, the last index the current one.
+3. Never use + - * / > < on whole series: use sub, add, mul, div, gt, lt… or map(i => …).
+4. Conditions (from crossover, gt, …) are series too: never write if (cond); pass them to strategy, or read cond[i] inside map.
+5. map(i => …) runs oldest bar first; variables outside it carry state from bar to bar.
+6. Bars without a value are NaN (e.g. before a period has filled); nz() turns them into 0.
+7. No clock (Date.now, new Date()), no randomness (Math.random), no network. A bar’s time is time[i] (ms, UTC).
+8. Never look ahead (i + 1): that value isn’t known on the bar.
+9. Other timeframes, symbols and market data come from request.bars / request.data; they are NaN until they arrive.
+10. Plain code only: no import, export or async/await.
+
+Labels, names and inputs may be in Korean (the platform is Korean); keep code identifiers in English.
+
+## Template
+
+```js
+//@version=2
+indicator({ name: 'My indicator', overlay: true })
+const len = input.int('Length', 20, { min: 2 })
+const ma = ta.ema(close, len)
+plot('EMA', ma, { color: color.orange })
+```
+
+## Types
+
+```ts
+/** One number per bar, oldest first (NaN = no value). Use sub/add/gt… or map, never + - > on it. */
+interface Series extends Float64Array {}
+/** True (1) / false (0) per bar. */
+interface Cond extends Uint8Array {}
+type Source = Series | Cond | number;
+/** Where a condition is expected: a Cond, or a Series (non-zero = true). */
+type Bool = Cond | Series;
+type Color = string;
+/** A color for each bar from its index (null: none there). */
+type PerBarColor = (i: number) => Color | null | undefined;
+type PlotStyle = 'line' | 'step' | 'area' | 'circles' | 'cross' | 'histogram' | 'columns';
+type LineStyle = 'solid' | 'dotted' | 'dashed';
+type Extend = 'none' | 'left' | 'right' | 'both';
+type Size = 'tiny' | 'small' | 'normal' | 'large';
+type Position = 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+type Shape = 'triangleup' | 'triangledown' | 'arrowup' | 'arrowdown' | 'circle' | 'square' | 'diamond' | 'cross' | 'xcross' | 'flag';
+/** Where a mark sits: over the bar's high, under its low, at a given price, or at the pane's top / bottom edge. */
+type Place = 'above' | 'below' | 'price' | 'top' | 'bottom';
+/** A bar length: minutes, or 1D / 1W / 1M. */
+type Timeframe = '1' | '3' | '5' | '15' | '30' | '60' | '120' | '240' | '1D' | '1W' | '1M';
+/** What compute's function gets: the requested bars (open, high, low, close, volume, time, bar.count) and ta / calc working on them. */
+type RequestedBars = { open: Series; high: Series; low: Series; close: Series; volume: Series; time: Series; bar: { count: number }; ta: typeof ta; add: typeof add; sub: typeof sub; mul: typeof mul; div: typeof div; max: typeof max; min: typeof min; abs: typeof abs; avg: typeof avg; gt: typeof gt; lt: typeof lt; gte: typeof gte; lte: typeof lte; eq: typeof eq; and: typeof and; or: typeof or; not: typeof not; prev: typeof prev; last: typeof last; nz: typeof nz; fixnan: typeof fixnan; map: typeof map };
+type DataName = 'funding' | 'openInterest' | 'longShortRatio' | 'topLongShortRatio' | 'kimchiPremium' | 'cvd' | 'fearGreed' | 'coinbasePremium' | 'dvol' | 'stablecoins';
+/** Where an input is shown: a section (group), a shared row (inline), a note (tooltip). */
+type InputOptions = { group?: string; inline?: string; tooltip?: string };
+```
+
+## Names in scope
+
+### Declaration
+
+- `indicator` — `function indicator(o: { name: string; overlay: boolean; precision?: number; range?: [number, number] }): void` — Name and place: overlay true draws on the candles, false in its own pane. Call once, first. range fixes the pane’s scale. Example: `indicator({ name: 'RSI', overlay: false, range: [0, 100] })`
+
+### Data
+
+- `open` — `const open: Series` — Open price per bar
+- `high` — `const high: Series` — High price per bar
+- `low` — `const low: Series` — Low price per bar
+- `close` — `const close: Series` — Close per bar (the current bar: the latest price)
+- `volume` — `const volume: Series` — Volume per bar
+- `time` — `const time: Series` — Bar open time (UTC milliseconds)
+- `hl2` — `const hl2: Series` — (high + low) / 2
+- `hlc3` — `const hlc3: Series` — (high + low + close) / 3
+- `ohlc4` — `const ohlc4: Series` — (open + high + low + close) / 4
+- `hlcc4` — `const hlcc4: Series` — (high + low + 2 × close) / 4
+- `turnover` — `const turnover: Series` — Value traded per bar (where the exchange gives it, else NaN)
+- `bar.count` — `const bar: { count: number }` — Number of bars
+- `request.bars` — `bars(o: { symbol?: string; timeframe?: Timeframe }): { open: Series; high: Series; low: Series; close: Series; volume: Series; time: Series; compute<T extends Series | Record<string, Series>>(fn: (b: RequestedBars) => T): T }` — Bars of another timeframe or symbol, lined up with this chart’s bars. A bar is seen only once it has closed by the chart bar’s close (no look-ahead): on an hourly chart, the daily value changes after the day ends. To calculate on those bars use compute: d.compute((b) => b.ta.ema(b.close, 20)) is the daily 20 EMA. Up to 4 Example: `const d = request.bars({ timeframe: '1D' })`
+- `request.data` — `data(name: DataName, o?: { symbol?: string }): Series` — Market data lined up with this chart’s bars: funding (%), openInterest ($M), longShortRatio / topLongShortRatio, kimchiPremium (%), cvd, fearGreed (0–100), coinbasePremium (%), dvol, stablecoins ($B). Mostly for Binance futures symbols. Up to 8 Example: `const f = request.data('funding')`
+
+### Inputs
+
+- `input.int` — `int(label: string, def: number, o?: { min?: number; max?: number } & InputOptions): number` — A whole number the user can change (a period…) Example: `const len = input.int('Length', 14, { min: 2, max: 200 })`
+- `input.number` — `number(label: string, def: number, o?: { min?: number; max?: number; step?: number } & InputOptions): number` — A number the user can change Example: `const mult = input.number('Multiplier', 2, { step: 0.1 })`
+- `input.bool` — `bool(label: string, def: boolean, o?: InputOptions): boolean` — An on/off switch Example: `const show = input.bool('Show signals', true)`
+- `input.select` — `select<T extends string | number>(label: string, options: T[], def: T, o?: InputOptions): T` — A choice from a list (of strings or numbers) Example: `const kind = input.select('Type', ['EMA', 'SMA'], 'EMA')`
+- `input.source` — `source(label: string, def?: 'close' | 'open' | 'high' | 'low' | 'hl2' | 'hlc3' | 'ohlc4' | 'hlcc4', o?: InputOptions): Series` — Which price to use (close, open…) Example: `const src = input.source('Source', 'close')`
+- `input.text` — `text(label: string, def?: string, o?: InputOptions): string` — Text the user types (e.g. a list like '1,3,6'); up to 200 characters Example: `const list = input.text('Lines', '1,3,6')`
+- `input.color` — `color(label: string, def: Color, o?: InputOptions): Color` — A color the user picks Example: `const c = input.color('Line color', color.orange, { group: 'Style' })`
+
+### Moving averages
+
+- `ta.sma` — `sma(src: Source, length: number): Series` — Simple moving average Example: `ta.sma(close, 20)`
+- `ta.ema` — `ema(src: Source, length: number): Series` — Exponential moving average (seeded with the SMA) Example: `ta.ema(close, 20)`
+- `ta.rma` — `rma(src: Source, length: number): Series` — Wilder’s moving average (used by RSI, ATR)
+- `ta.wma` — `wma(src: Source, length: number): Series` — Weighted moving average
+- `ta.vwma` — `vwma(src: Source, length: number): Series` — Volume-weighted moving average
+- `ta.hma` — `hma(src: Source, length: number): Series` — Hull moving average
+- `ta.dema` — `dema(src: Source, length: number): Series` — Double EMA (2·EMA − EMA of the EMA)
+- `ta.tema` — `tema(src: Source, length: number): Series` — Triple EMA
+- `ta.linreg` — `linreg(src: Source, length: number, offset?: number): Series` — Least-squares regression value (LSMA); offset reads that many bars back Example: `ta.linreg(close, 25, 0)`
+- `ta.alma` — `alma(src: Source, length: number, offset?: number, sigma?: number): Series` — Arnaud Legoux moving average (default offset 0.85, sigma 6) Example: `ta.alma(close, 9, 0.85, 6)`
+
+### Oscillators
+
+- `ta.rsi` — `rsi(src: Source, length?: number): Series` — Relative strength index (0–100, default 14) Example: `ta.rsi(close, 14)`
+- `ta.stoch` — `stoch(length?: number, smoothK?: number, smoothD?: number): { k: Series; d: Series }` — Stochastic %K and %D (default 14, 3, 3) Example: `const s = ta.stoch(14, 3, 3)`
+- `ta.macd` — `macd(src: Source, fast?: number, slow?: number, signal?: number): { macd: Series; signal: Series; hist: Series }` — MACD (default 12, 26, 9) Example: `const m = ta.macd(close, 12, 26, 9)`
+- `ta.cci` — `cci(src: Source, length?: number): Series` — Commodity channel index (default 20)
+- `ta.mfi` — `mfi(length?: number): Series` — Money flow index (0–100, from hlc3 and volume)
+- `ta.roc` — `roc(src: Source, length: number): Series` — Rate of change vs length bars ago (%)
+- `ta.mom` — `mom(src: Source, length?: number): Series` — Momentum: change vs length bars ago
+
+### Volatility · trend
+
+- `ta.atr` — `atr(length?: number): Series` — Average true range (default 14) Example: `ta.atr(14)`
+- `ta.tr` — `tr(): Series` — True range
+- `ta.bb` — `bb(src: Source, length?: number, mult?: number): { upper: Series; mid: Series; lower: Series; width: Series }` — Bollinger Bands (default 20, 2); width = (upper − lower) / mid Example: `const band = ta.bb(close, 20, 2)`
+- `ta.stdev` — `stdev(src: Source, length: number): Series` — Standard deviation
+- `ta.dmi` — `dmi(length?: number, adxSmoothing?: number): { plus: Series; minus: Series; adx: Series }` — Directional movement: +DI, −DI and ADX
+- `ta.adx` — `adx(length?: number, smoothing?: number): Series` — ADX (trend strength)
+- `ta.supertrend` — `supertrend(factor?: number, atrLength?: number): { line: Series; dir: Series }` — SuperTrend (default 3, 10); dir 1 = up, −1 = down Example: `const st = ta.supertrend(3, 10)`
+
+### Ranges · volume
+
+- `ta.highest` — `highest(src: Source, length: number): Series` — Highest value of the last length bars Example: `ta.highest(high, 20)`
+- `ta.lowest` — `lowest(src: Source, length: number): Series` — Lowest value of the last length bars
+- `ta.change` — `change(src: Source, length?: number): Series` — Change vs length bars ago (default 1)
+- `ta.cum` — `cum(src: Source): Series` — Running total (NaN counts as 0)
+- `ta.obv` — `obv(): Series` — On-balance volume
+
+### Conditions
+
+- `ta.crossover` — `crossover(a: Source, b: Source): Cond` — True on the bar where a crosses above b Example: `ta.crossover(fast, slow)`
+- `ta.crossunder` — `crossunder(a: Source, b: Source): Cond` — True on the bar where a crosses below b
+- `ta.cross` — `cross(a: Source, b: Source): Cond` — True on a cross either way
+- `ta.rising` — `rising(src: Source, length: number): Cond` — Higher than each of the previous length values
+- `ta.falling` — `falling(src: Source, length: number): Cond` — Lower than each of the previous length values
+- `ta.pivothigh` — `pivothigh(src: Source, left: number, right: number): Series` — Pivot high (above both sides): its value on the bar right bars later that confirms it, else NaN
+- `ta.pivotlow` — `pivotlow(src: Source, left: number, right: number): Series` — Pivot low, like pivothigh
+- `ta.barssince` — `barssince(cond: Bool): Series` — Bars since the condition was last true
+- `ta.valuewhen` — `valuewhen(cond: Bool, src: Source, occurrence?: number): Series` — src on the bar where cond was true (0 = most recent)
+
+### Series math
+
+- `add` — `function add(a: Source, b: Source): Series` — a + b per bar
+- `sub` — `function sub(a: Source, b: Source): Series` — a − b per bar Example: `sub(close, open)`
+- `mul` — `function mul(a: Source, b: Source): Series` — a × b per bar
+- `div` — `function div(a: Source, b: Source): Series` — a ÷ b per bar (÷0 gives NaN)
+- `abs` — `function abs(a: Source): Series` — Absolute value
+- `max` — `function max(a: Source, b: Source): Series` — Larger value per bar
+- `min` — `function min(a: Source, b: Source): Series` — Smaller value per bar
+- `avg` — `function avg(...xs: Source[]): Series` — Average per bar
+- `gt` — `function gt(a: Source, b: Source): Cond` — a > b Example: `gt(close, ta.sma(close, 200))`
+- `lt` — `function lt(a: Source, b: Source): Cond` — a < b
+- `gte` — `function gte(a: Source, b: Source): Cond` — a ≥ b
+- `lte` — `function lte(a: Source, b: Source): Cond` — a ≤ b
+- `eq` — `function eq(a: Source, b: Source): Cond` — a = b
+- `and` — `function and(a: Bool, b: Bool): Cond` — Both true
+- `or` — `function or(a: Bool, b: Bool): Cond` — Either true
+- `not` — `function not(a: Bool): Cond` — Negation
+- `prev` — `function prev(src: Source, bars?: number): Series` — The value bars bars ago (default 1)
+- `last` — `function last(src: Source): number` — The latest bar’s value Example: `last(close)`
+- `nz` — `function nz(src: Source, value?: number): Series` — NaN replaced by value (default 0)
+- `fixnan` — `function fixnan(src: Source): Series` — NaN replaced by the previous value
+- `map` — `function map(fn: (i: number) => number | boolean): Series` — Compute bar by bar, oldest first; outer variables keep state Example: `map(i => (high[i] - low[i]) / close[i] * 100)`
+
+### Drawing
+
+- `plot` — `function plot(name: string, values: Source, o?: { color?: Color | PerBarColor; width?: number; style?: PlotStyle; lineStyle?: LineStyle; offset?: number }): void` — Draw a series; up to 40. style: line, step, area, circles, cross, histogram (bars from 0, rising / falling colors by default), columns. A function as color colors each bar: i => up[i] ? color.green : color.red. offset shifts it right by bars (negative: left) Example: `plot('EMA', fast, { color: (i) => (fast[i] > fast[i - 1] ? color.green : color.red), width: 2 })`
+- `hline` — `function hline(value: number, o?: { label?: string; color?: Color; style?: LineStyle; width?: number }): void` — Horizontal reference line (name, color, style); up to 20 Example: `hline(70, { label: 'Overbought', color: color.red })`
+- `fill` — `function fill(upper: string, lower: string, o?: { color?: Color | PerBarColor; downColor?: Color }): void` — Shade between two plots, by name, after them; up to 10. A color without alpha is shaded lightly. downColor: where the lower one is on top. A function as color colors each bar (null: not shaded) Example: `plot('Upper', bb.upper)
+plot('Lower', bb.lower)
+fill('Upper', 'Lower', { color: color.alpha(color.blue, 0.1) })`
+- `bgcolor` — `function bgcolor(when: Bool | PerBarColor, o?: { color?: Color }): void` — Shade the background (a condition and a color, or a function giving each bar a color); up to 10. Colors without alpha are shaded lightly Example: `bgcolor(gt(close, ta.ema(close, 200)), { color: color.green })`
+- `barcolor` — `function barcolor(when: Bool | PerBarColor, o?: { color?: Color }): void` — Recolor candles (indicators over the candles): a condition and a color, or a function giving each bar a color Example: `barcolor(ta.crossover(close, ta.sma(close, 20)), { color: color.yellow })`
+- `plotshape` — `function plotshape(when: Bool, o?: { shape?: Shape; location?: Place; price?: Source; color?: Color; textColor?: Color; text?: string; size?: Size }): void` — A shape on every bar where the condition is true; up to 20. Up shapes sit under the bar, others over it Example: `plotshape(ta.crossover(fast, slow), { shape: 'triangleup', text: 'Buy' })`
+- `label` — `function label(bar: number, text: string, o?: { location?: Place; price?: number; color?: Color; textColor?: Color; style?: 'box' | 'text'; align?: 'left' | 'center' | 'right'; size?: Size }): void` — Text on the chart. bar: the index (-1 = the latest, bar.count + 3 = the empty space on the right). With price, at that price. style 'text' has no box; align 'right' starts at the point. The latest 500 stay Example: `label(-1, 'RSI ' + last(rsi).toFixed(1))`
+- `line` — `function line(x1: number, y1: number, x2: number, y2: number, o?: { color?: Color; width?: number; style?: LineStyle; extend?: Extend }): void` — A line between two points (bar index, price). extend 'right', 'left' or 'both' runs it to the edge. The latest 500 stay Example: `line(-50, last(high), -1, last(high), { color: color.orange, style: 'dashed', extend: 'right' })`
+- `box` — `function box(left: number, top: number, right: number, bottom: number, o?: { color?: Color; bg?: Color; width?: number; style?: LineStyle; extend?: Extend; text?: string; textColor?: Color }): void` — A rectangle (bar indices, prices). color: the border, bg: the inside (lightly, without alpha). extend 'right' runs it to the edge. The latest 500 stay Example: `box(-30, last(high), -1, last(low), { color: color.red, bg: color.alpha(color.red, 0.15), extend: 'right', text: 'Range' })`
+- `table` — `function table(o: { position?: Position; rows: (string | number | null | { text: string; color?: Color; bg?: Color; align?: 'left' | 'center' | 'right' })[][]; bg?: Color; textColor?: Color; border?: Color; size?: Size }): void` — A table in a corner of the chart (a dashboard). rows: a list of rows, each a list of cells. Up to 4, 60 rows × 10 cells Example: `table({ position: 'top-right', rows: [['RSI', last(rsi).toFixed(1)], ['EMA', last(fast).toFixed(2)]] })`
+- `color` — `const color: { up: Color; down: Color; red: Color; blue: Color; green: Color; orange: Color; yellow: Color; purple: Color; pink: Color; teal: Color; gray: Color; white: Color; black: Color; alpha(c: Color, opacity: number): Color; "new"(c: Color, transparency?: number): Color; rgb(r: number, g: number, b: number, opacity?: number): Color }` — Colors; color.up / color.down follow the viewer’s rising / falling colors. '#RRGGBB' and '#RRGGBBAA' work too. color.alpha(c, 0.2) sets opacity 0 (invisible)–1; color.new(c, 80) is Pine’s transparency 0–100 Example: `color.alpha(color.green, 0.2)`
+
+### Strategy · alerts · debug
+
+- `strategy` — `function strategy(o: { long?: Bool; longExit?: Bool; short?: Bool; shortExit?: Bool; stopLoss?: number | Series | { long?: number | Series; short?: number | Series }; takeProfit?: number | Series | { long?: number | Series; short?: number | Series }; trailingStop?: number; size?: number; capital?: number; fee?: number; slippage?: number; reverse?: boolean }): void` — The backtest strategy (once). Signals fill at the next bar’s open. long / short: entry conditions; longExit / shortExit: exits (without them, only stops, targets and the other side’s entry close). stopLoss / takeProfit: % from the entry (a number) or a price per bar (a series; the bar before’s value is used). For a different level per side give { long, short } (one price series in a two-way strategy would sit on the same line for shorts too); a side left out has none. trailingStop: % back from the best price. A bar touching both stop and target takes the stop. size: % of the account per trade (default 100). capital: starting money (default 10000). fee / slippage: % per fill (default: the viewer’s settings). reverse: an entry the other way turns the position (default true). The old { entry, exit, side } still works Example: `strategy({ long: ta.crossover(fast, slow), short: ta.crossunder(fast, slow), stopLoss: { long: sub(low, ta.atr(14)), short: add(high, ta.atr(14)) }, takeProfit: 4 })`
+- `alert` — `function alert(when: Bool, message?: string): void` — An alert (up to 10). Rings when the condition is true on a bar that just closed (a forming bar is judged when it closes), for the market and timeframe the user turned 'Get alerts' on for, while the terminal is open. message may hold {name} {symbol} {close} {time} Example: `alert(ta.crossover(fast, slow), '{symbol} golden cross at {close}')`
+- `screen` — `function screen(name: string, value: Series | Cond | number): void` — A screener column (up to 10): the value on the last bar. The screener runs the script on many markets and sorts and filters by it Example: `screen('RSI', ta.rsi(close, 14))`
+- `log` — `function log(...values: unknown[]): void` — Print values for checking (up to 50 lines)
+
+## Common mistakes
+
+- arithmetic on whole series: `const body = close - open` → `const body = sub(close, open)`
+- a condition inside if: `if (ta.crossover(fast, slow)) …` → `strategy({ long: ta.crossover(fast, slow), longExit: ta.crossunder(fast, slow) })`
+- comparing whole series: `const up = close > open` → `const up = gt(close, open)`
+- the last bar’s index: `close[close.length]` → `last(close)  // or close[close.length - 1]`
+- drawing a 0–100 oscillator over the candles: `plot('RSI', ta.rsi(close, 14))  // with overlay: true` → `indicator({ name: 'RSI', overlay: false, range: [0, 100] })`
+
+## Errors
+
+A failed run reports a code (SERIES_ARITHMETIC, CONDITION_IN_IF, MISSING_DECLARATION, BAD_ARG, FORBIDDEN, LIMIT, SYNTAX, RUNTIME), the line, and a hint with the fix. Apply the hint literally.
+
+## Examples
+
+### 01-ema-cross.js
+
+```js
+//@version=2
+// EMA cross strategy: buy when the fast EMA crosses above the slow one, sell when it crosses back.
+indicator({ name: 'EMA cross strategy', overlay: true })
+const fastLen = input.int('Fast length', 12, { min: 2, max: 100 })
+const slowLen = input.int('Slow length', 26, { min: 3, max: 300 })
+
+const fast = ta.ema(close, fastLen)
+const slow = ta.ema(close, slowLen)
+plot('Fast EMA', fast, { color: color.orange })
+plot('Slow EMA', slow, { color: color.purple })
+
+strategy({ long: ta.crossover(fast, slow), longExit: ta.crossunder(fast, slow) })
+```
+
+### 02-rsi.js
+
+```js
+//@version=2
+// RSI in its own pane with overbought / oversold lines.
+indicator({ name: 'RSI', overlay: false, range: [0, 100] })
+const len = input.int('Length', 14, { min: 2, max: 100 })
+const src = input.source('Source', 'close')
+
+plot('RSI', ta.rsi(src, len), { color: color.purple, width: 2 })
+hline(70, { label: 'Overbought', color: color.down })
+hline(30, { label: 'Oversold', color: color.up })
+```
+
+### 03-bollinger.js
+
+```js
+//@version=2
+// Bollinger Bands over the candles.
+indicator({ name: 'Bollinger Bands', overlay: true })
+const len = input.int('Length', 20, { min: 2 })
+const mult = input.number('StdDev multiplier', 2, { min: 0.5, max: 5, step: 0.1 })
+
+const band = ta.bb(close, len, mult)
+plot('Upper', band.upper, { color: color.blue })
+plot('Basis', band.mid, { color: color.gray })
+plot('Lower', band.lower, { color: color.blue })
+```
+
+### 04-macd.js
+
+```js
+//@version=2
+// MACD with the histogram as bars.
+indicator({ name: 'MACD', overlay: false })
+const m = ta.macd(close, 12, 26, 9)
+plot('Histogram', m.hist, { style: 'histogram' })
+plot('MACD', m.macd, { color: color.blue })
+plot('Signal', m.signal, { color: color.orange })
+hline(0)
+```
+
+### 05-supertrend.js
+
+```js
+//@version=2
+// SuperTrend as a strategy: long while the trend is up.
+indicator({ name: 'SuperTrend', overlay: true })
+const factor = input.number('Factor', 3, { min: 1, max: 10, step: 0.5 })
+const len = input.int('ATR length', 10, { min: 2 })
+
+const st = ta.supertrend(factor, len)
+plot('SuperTrend', st.line, { color: color.orange, width: 2 })
+
+const up = eq(st.dir, 1)
+strategy({ long: and(up, not(prev(up, 1))), longExit: and(not(up), prev(up, 1)) })
+```
+
+### 06-volume-spike.js
+
+```js
+//@version=2
+// Volume against its average: bars above 1 trade more than usual.
+indicator({ name: 'Volume ratio', overlay: false })
+const len = input.int('Average length', 20, { min: 2 })
+const ratio = div(volume, ta.sma(volume, len))
+plot('Volume / average', ratio, { style: 'histogram' })
+hline(2, { label: 'Spike' })
+```
+
+### 07-donchian.js
+
+```js
+//@version=2
+// Donchian channel breakout: buy a new 20-bar high, sell a new 10-bar low.
+indicator({ name: 'Donchian breakout', overlay: true })
+const upper = ta.highest(high, input.int('Entry length', 20))
+const lower = ta.lowest(low, input.int('Exit length', 10))
+plot('Upper channel', upper, { color: color.green })
+plot('Lower channel', lower, { color: color.red })
+
+// The breakout compares with the channel up to the previous bar (no look-ahead).
+strategy({ long: gt(close, prev(upper, 1)), longExit: lt(close, prev(lower, 1)) })
+```
+
+### 08-stochastic.js
+
+```js
+//@version=2
+// Stochastic oscillator.
+indicator({ name: 'Stochastic', overlay: false, range: [0, 100] })
+const s = ta.stoch(input.int('Length', 14), 3, 3)
+plot('%K', s.k, { color: color.blue })
+plot('%D', s.d, { color: color.orange })
+hline(80)
+hline(20)
+```
+
+### 09-streak.js
+
+```js
+//@version=2
+// Consecutive rising closes, counted bar by bar with map and an outer variable.
+indicator({ name: 'Up streak', overlay: false })
+let streak = 0
+const count = map(i => {
+  streak = i > 0 && close[i] > close[i - 1] ? streak + 1 : 0
+  return streak
+})
+plot('Bars up in a row', count, { style: 'histogram', color: color.up })
+```
+
+### 10-atr-stop.js
+
+```js
+//@version=2
+// A trailing stop line: highest close minus a multiple of ATR, never moving down while in a trend.
+indicator({ name: 'ATR trailing stop', overlay: true })
+const mult = input.number('ATR multiplier', 3, { min: 0.5, step: 0.5 })
+const atr = ta.atr(14)
+let stop = NaN
+const line = map(i => {
+  const level = close[i] - mult * atr[i]
+  if (Number.isNaN(level)) return NaN
+  stop = Number.isNaN(stop) || close[i] < stop ? level : Math.max(stop, level)
+  return stop
+})
+plot('Trailing stop', line, { color: color.down, width: 2 })
+```
+
+### 11-ichimoku.js
+
+```js
+//@version=2
+// Ichimoku: conversion and base lines, the two leading spans shifted 26 bars ahead with the cloud between them
+// (green while A is on top, red while B is), and the lagging span shifted 26 bars back.
+indicator({ name: 'Ichimoku', overlay: true })
+const conv = input.int('Conversion', 9, { min: 2 })
+const base = input.int('Base', 26, { min: 2 })
+const spanB = input.int('Lead B', 52, { min: 2 })
+const shift = input.int('Displacement', 26, { min: 1, max: 100 })
+
+const mid = (len) => avg(ta.highest(high, len), ta.lowest(low, len))
+const tenkan = mid(conv)
+const kijun = mid(base)
+
+plot('Conversion', tenkan, { color: color.blue })
+plot('Base', kijun, { color: color.red })
+plot('Lead A', avg(tenkan, kijun), { color: color.green, offset: shift })
+plot('Lead B', mid(spanB), { color: color.orange, offset: shift })
+plot('Lagging', close, { color: color.gray, offset: -shift })
+fill('Lead A', 'Lead B', { color: color.green, downColor: color.red })
+```
+
+### 12-signals.js
+
+```js
+//@version=2
+// Signals: shade the uptrend (close above the 200 EMA); inside it mark ▲ Buy when RSI crosses above 30,
+// and ▼ Sell when it falls below 70. The latest bar gets the RSI now.
+indicator({ name: 'RSI signals', overlay: true })
+const len = input.int('RSI length', 14, { min: 2 })
+const trendLen = input.int('Trend EMA', 200, { min: 10 })
+
+const rsi = ta.rsi(close, len)
+const trend = ta.ema(close, trendLen)
+const upTrend = gt(close, trend)
+
+plot('Trend EMA', trend, { color: color.purple, width: 2 })
+bgcolor(upTrend, { color: '#12B88614' })
+plotshape(and(upTrend, ta.crossover(rsi, 30)), { shape: 'triangleup', text: 'Buy' })
+plotshape(ta.crossunder(rsi, 70), { shape: 'triangledown', text: 'Sell' })
+label(-1, `RSI ${last(rsi).toFixed(1)}`, { location: 'above' })
+```
+
+### 13-risk.js
+
+```js
+//@version=2
+// Both ways with risk control: long on a golden cross above the 200 EMA, short on a dead cross below it.
+// Stop 1.5 ATR away (a price per bar), target 3%, a 2% trailing stop, 50% of the account per trade.
+indicator({ name: 'EMA cross with stops', overlay: true })
+const fast = ta.ema(close, input.int('Fast', 12, { min: 2 }))
+const slow = ta.ema(close, input.int('Slow', 26, { min: 3 }))
+const trend = ta.ema(close, 200)
+const atr = ta.atr(14)
+
+plot('Fast', fast, { color: color.orange })
+plot('Slow', slow, { color: color.purple })
+plot('Trend', trend, { color: color.gray })
+
+const up = gt(close, trend)
+strategy({
+  long: and(ta.crossover(fast, slow), up),
+  short: and(ta.crossunder(fast, slow), not(up)),
+  stopLoss: map((i) => (close[i] > trend[i] ? close[i] - 1.5 * atr[i] : close[i] + 1.5 * atr[i])),
+  takeProfit: 3,
+  trailingStop: 2,
+  size: 50,
+})
+```
+
+### 14-higher-timeframe.js
+
+```js
+//@version=2
+// Another timeframe and market data: trade the hourly chart only with the daily trend (the last
+// closed daily bar above its 20-day EMA, worked out on the daily bars), and skip longs when
+// funding runs hot.
+indicator({ name: 'Daily trend filter', overlay: true })
+const daily = request.bars({ timeframe: '1D' })
+const dailyEma = daily.compute((b) => b.ta.ema(b.close, 20))
+const funding = request.data('funding')
+
+const fast = ta.ema(close, 20)
+plot('EMA 20', fast, { color: color.orange })
+plot('Daily EMA 20', dailyEma, { style: 'step', color: color.gray })
+
+const dailyUp = gt(daily.close, dailyEma)
+bgcolor(dailyUp, { color: color.green })
+const calm = map((i) => Number.isNaN(funding[i]) || funding[i] < 0.03)
+strategy({ long: and(and(ta.crossover(close, fast), dailyUp), calm), longExit: ta.crossunder(close, fast), stopLoss: 2 })
+```

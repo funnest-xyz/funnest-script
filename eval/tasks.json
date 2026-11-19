@@ -1,0 +1,445 @@
+[
+  {
+    "id": "ema-cross",
+    "ask": "EMA 12와 EMA 26을 차트 위에 그리고, 골든크로스에 사고 데드크로스에 파는 전략",
+    "expect": {
+      "overlay": true,
+      "plots": 2,
+      "strategy": "long",
+      "uses": [
+        "ema"
+      ]
+    }
+  },
+  {
+    "id": "rsi-levels",
+    "ask": "RSI 14를 아래 창에 그리고 30, 70 기준선을 그어줘",
+    "expect": {
+      "overlay": false,
+      "plots": 1,
+      "hlines": 2,
+      "uses": [
+        "rsi"
+      ]
+    }
+  },
+  {
+    "id": "bollinger",
+    "ask": "볼린저 밴드 (20, 2) 상단·중간·하단선",
+    "expect": {
+      "overlay": true,
+      "plots": 3,
+      "uses": [
+        "bb"
+      ]
+    }
+  },
+  {
+    "id": "macd",
+    "ask": "MACD 선, 시그널 선, 히스토그램을 아래 창에",
+    "expect": {
+      "overlay": false,
+      "plots": 3,
+      "uses": [
+        "macd"
+      ],
+      "histogram": true
+    }
+  },
+  {
+    "id": "supertrend",
+    "ask": "슈퍼트렌드(3, 10)를 상승일 때 초록, 하락일 때 빨강으로 그리고 방향이 바뀌면 매매하는 전략",
+    "expect": {
+      "overlay": true,
+      "plots": 1,
+      "strategy": "any",
+      "uses": [
+        "supertrend"
+      ]
+    }
+  },
+  {
+    "id": "volume-spike",
+    "ask": "거래량이 최근 20봉 평균의 2배를 넘는 봉을 표시하는 지표 (아래 창, 거래량 막대와 평균선)",
+    "expect": {
+      "overlay": false,
+      "plots": 2,
+      "uses": [
+        "volume"
+      ]
+    }
+  },
+  {
+    "id": "donchian",
+    "ask": "20봉 최고가를 돌파하면 매수, 10봉 최저가를 깨면 청산하는 돈치안 돌파 전략, 채널 선도 그려줘",
+    "expect": {
+      "overlay": true,
+      "plots": 2,
+      "strategy": "long",
+      "uses": [
+        "highest",
+        "lowest"
+      ]
+    }
+  },
+  {
+    "id": "stoch",
+    "ask": "스토캐스틱 %K %D (14,3,3)을 그리고 20 아래에서 %K가 %D를 상향 돌파하면 매수, 80 위에서 하향 돌파하면 청산",
+    "expect": {
+      "overlay": false,
+      "plots": 2,
+      "strategy": "long",
+      "uses": [
+        "stoch"
+      ]
+    }
+  },
+  {
+    "id": "atr-stop",
+    "ask": "종가에서 ATR(14)의 3배를 뺀 트레일링 스톱 선 (올라가기만 하고 내려가지 않게)",
+    "expect": {
+      "overlay": true,
+      "plots": 1,
+      "uses": [
+        "atr"
+      ]
+    }
+  },
+  {
+    "id": "vwma-sma",
+    "ask": "20일 VWMA와 20일 SMA를 함께 그려서 비교",
+    "expect": {
+      "overlay": true,
+      "plots": 2,
+      "uses": [
+        "vwma",
+        "sma"
+      ]
+    }
+  },
+  {
+    "id": "ema-input",
+    "ask": "길이를 사용자가 바꿀 수 있는 EMA 하나 (기본 50)",
+    "expect": {
+      "overlay": true,
+      "plots": 1,
+      "inputs": 1,
+      "uses": [
+        "ema"
+      ]
+    }
+  },
+  {
+    "id": "ma-select",
+    "ask": "SMA, EMA, WMA 중에서 고를 수 있는 이동평균선 (길이도 입력으로)",
+    "expect": {
+      "overlay": true,
+      "plots": 1,
+      "inputs": 2
+    }
+  },
+  {
+    "id": "rsi-short",
+    "ask": "RSI가 70을 위에서 아래로 깨면 숏 진입, 50 아래로 내려가면 숏 청산하는 전략",
+    "expect": {
+      "strategy": "short",
+      "uses": [
+        "rsi"
+      ]
+    }
+  },
+  {
+    "id": "streak",
+    "ask": "연속으로 오른 봉의 개수를 세서 아래 창에 막대로 보여줘 (내리면 0부터 다시)",
+    "expect": {
+      "overlay": false,
+      "plots": 1
+    }
+  },
+  {
+    "id": "obv",
+    "ask": "OBV와 OBV의 20 EMA",
+    "expect": {
+      "overlay": false,
+      "plots": 2,
+      "uses": [
+        "obv"
+      ]
+    }
+  },
+  {
+    "id": "adx",
+    "ask": "ADX 14와 +DI, -DI를 그리고 25 기준선",
+    "expect": {
+      "overlay": false,
+      "plots": 3,
+      "hlines": 1,
+      "uses": [
+        "adx|dmi"
+      ]
+    }
+  },
+  {
+    "id": "pivots",
+    "ask": "좌우 5봉 기준 피벗 고점과 피벗 저점을 차트에 표시",
+    "expect": {
+      "overlay": true,
+      "uses": [
+        "pivothigh",
+        "pivotlow"
+      ],
+      "drawn": 2
+    }
+  },
+  {
+    "id": "golden-200",
+    "ask": "50일선이 200일선을 상향 돌파하면 사고 하향 돌파하면 파는 전략. 마지막 골든크로스가 몇 봉 전이었는지 로그로 남겨줘",
+    "expect": {
+      "overlay": true,
+      "plots": 2,
+      "strategy": "long",
+      "logs": 1
+    }
+  },
+  {
+    "id": "hull-slope",
+    "ask": "Hull 이동평균 (55)을 올라갈 때 초록, 내려갈 때 빨강으로",
+    "expect": {
+      "overlay": true,
+      "plots": 1,
+      "uses": [
+        "hma"
+      ]
+    }
+  },
+  {
+    "id": "rsi-trend",
+    "ask": "종가가 200 EMA 위에 있을 때만 RSI(2)가 10 아래면 매수, RSI(2)가 70 위면 청산하는 전략",
+    "expect": {
+      "strategy": "long",
+      "uses": [
+        "rsi",
+        "ema"
+      ]
+    }
+  },
+  {
+    "id": "bb-fill",
+    "ask": "볼린저 밴드 (20, 2)를 그리고 상단과 하단 사이를 파랗게 칠해줘",
+    "expect": {
+      "overlay": true,
+      "plots": 2,
+      "fill": true,
+      "uses": [
+        "bb"
+      ]
+    }
+  },
+  {
+    "id": "cross-marks",
+    "ask": "EMA 20과 EMA 50의 골든크로스에는 봉 아래 ▲, 데드크로스에는 봉 위 ▼를 표시해줘",
+    "expect": {
+      "overlay": true,
+      "shapes": 2,
+      "uses": [
+        "ema"
+      ]
+    }
+  },
+  {
+    "id": "trend-bg",
+    "ask": "종가가 200일 이동평균 위에 있는 동안 차트 배경을 옅은 초록으로 칠해줘",
+    "expect": {
+      "backgrounds": 1
+    }
+  },
+  {
+    "id": "ichimoku",
+    "ask": "일목균형표 (전환선 9, 기준선 26, 선행스팬 52, 26봉 앞으로) 구름대까지",
+    "expect": {
+      "overlay": true,
+      "plots": 4,
+      "fill": true,
+      "offset": true
+    }
+  },
+  {
+    "id": "rsi-label",
+    "ask": "RSI 14를 아래 창에 그리고, RSI가 70을 넘는 봉에는 캔들 위에 빨간 점을 찍고, 마지막 봉에 현재 RSI 값을 글자로 보여줘",
+    "expect": {
+      "shapes": 1,
+      "labels": 1,
+      "uses": [
+        "rsi"
+      ]
+    }
+  },
+  {
+    "id": "pivot-text",
+    "ask": "좌우 5봉 피벗 고점에는 H, 저점에는 L 글자를 표시해줘",
+    "expect": {
+      "overlay": true,
+      "marksWithText": 2,
+      "uses": [
+        "pivothigh",
+        "pivotlow"
+      ]
+    }
+  },
+  {
+    "id": "sr-boxes",
+    "ask": "최근 100봉의 최고가와 최저가에 오른쪽 끝까지 이어지는 가로선을 긋고, 최근 20봉의 고가~저가 범위를 반투명 박스로 표시해줘",
+    "expect": {
+      "overlay": true,
+      "lines": 2,
+      "boxes": 1
+    }
+  },
+  {
+    "id": "dashboard",
+    "ask": "RSI 14, EMA 20, EMA 50의 현재 값을 오른쪽 위에 표로 보여주는 대시보드 (EMA 두 개는 차트에도 그려줘)",
+    "expect": {
+      "overlay": true,
+      "plots": 2,
+      "tables": 1,
+      "uses": [
+        "rsi",
+        "ema"
+      ]
+    }
+  },
+  {
+    "id": "trend-candles",
+    "ask": "종가가 EMA 50 위면 캔들을 초록, 아래면 빨강으로 칠해줘",
+    "expect": {
+      "overlay": true,
+      "barColors": true,
+      "uses": [
+        "ema"
+      ]
+    }
+  },
+  {
+    "id": "colored-ma",
+    "ask": "EMA 21을 그리는데 기울기가 오르면 초록, 내리면 빨강으로 선 색을 봉마다 바꿔줘 (선 하나로)",
+    "expect": {
+      "overlay": true,
+      "plots": 1,
+      "perBarColor": true,
+      "uses": [
+        "ema"
+      ]
+    }
+  },
+  {
+    "id": "stop-take",
+    "ask": "RSI 14가 30을 위로 넘으면 매수하고, 손절 2%, 익절 5%로 청산하는 전략",
+    "expect": {
+      "strategy": "long",
+      "risk": [
+        "stopLoss",
+        "takeProfit"
+      ],
+      "uses": [
+        "rsi"
+      ]
+    }
+  },
+  {
+    "id": "long-short",
+    "ask": "EMA 9와 EMA 21이 골든크로스면 롱, 데드크로스면 숏으로 뒤집는 양방향 전략",
+    "expect": {
+      "strategy": "both",
+      "uses": [
+        "ema"
+      ]
+    }
+  },
+  {
+    "id": "atr-stop-strategy",
+    "ask": "20봉 최고가 돌파에 매수하고, 손절은 진입할 때 종가에서 ATR(14)의 2배 아래 가격, 3% 추적 손절도 걸어줘",
+    "expect": {
+      "strategy": "long",
+      "risk": [
+        "stopLoss",
+        "trailingStop"
+      ],
+      "uses": [
+        "atr",
+        "highest"
+      ]
+    }
+  },
+  {
+    "id": "sized",
+    "ask": "볼린저 밴드 하단을 위로 뚫으면 매수, 중간선에서 청산, 한 번에 자산의 30%만 쓰고 수수료는 0.1%로 백테스트하는 전략",
+    "expect": {
+      "strategy": "long",
+      "risk": [
+        "size",
+        "fee"
+      ],
+      "uses": [
+        "bb"
+      ]
+    }
+  },
+  {
+    "id": "htf-trend",
+    "ask": "1시간봉 차트에서, 일봉 종가가 일봉 50 EMA 위에 있을 때만 RSI 14가 30을 위로 넘으면 매수하고 RSI 70에서 청산하는 전략. 일봉 50 EMA도 차트에 그려줘",
+    "expect": {
+      "strategy": "long",
+      "plots": 1,
+      "uses": [
+        "request.bars",
+        "compute",
+        "rsi"
+      ]
+    }
+  },
+  {
+    "id": "funding-oi",
+    "ask": "펀딩비와 미결제약정을 아래 창에 그리고, 펀딩비가 0.05%를 넘는 봉은 배경을 빨갛게 칠해줘",
+    "expect": {
+      "overlay": false,
+      "plots": 2,
+      "backgrounds": 1,
+      "uses": [
+        "request.data"
+      ]
+    }
+  },
+  {
+    "id": "alert-cross",
+    "ask": "20 EMA와 60 EMA를 캔들 위에 그리고, 골든크로스가 나면 알림을 보내줘. 알림 메시지에 종목과 가격이 들어가게",
+    "expect": {
+      "overlay": true,
+      "plots": 2,
+      "alerts": 1,
+      "uses": [
+        "alert"
+      ]
+    }
+  },
+  {
+    "id": "screener-rsi-volume",
+    "ask": "스크리너에서 쓸 지표를 만들어줘: RSI(14), 20봉 평균 대비 거래량 배수, 200 EMA 위인지 여부를 칸으로 보여줘",
+    "expect": {
+      "screens": 3,
+      "uses": [
+        "screen"
+      ]
+    }
+  },
+  {
+    "id": "side-stops",
+    "ask": "20 EMA 돌파로 롱, 이탈로 숏 하는 전략을 짜줘. 손절은 ATR 2배인데 롱은 저가 아래, 숏은 고가 위로 따로 걸어줘",
+    "expect": {
+      "strategy": "both",
+      "sidedStop": true,
+      "risk": [
+        "stopLoss"
+      ]
+    }
+  }
+]

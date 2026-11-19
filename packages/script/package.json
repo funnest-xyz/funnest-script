@@ -1,0 +1,63 @@
+{
+  "name": "@funnest/script",
+  "version": "0.1.0",
+  "description": "Funnest Script v2: a JavaScript language for trading indicators and strategies — runtime, backtest, live trading rules and machine-readable docs for AI",
+  "keywords": [
+    "trading",
+    "indicator",
+    "strategy",
+    "backtest",
+    "pine-script",
+    "technical-analysis",
+    "ai",
+    "funnest"
+  ],
+  "license": "Apache-2.0",
+  "author": "Funnest",
+  "homepage": "https://github.com/funnest-xyz/funnest-script/tree/main/packages/script#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/funnest-xyz/funnest-script.git",
+    "directory": "packages/script"
+  },
+  "bugs": {
+    "url": "https://github.com/funnest-xyz/funnest-script/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "funnest-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./worker": {
+      "funnest-source": "./src/generated/worker.ts",
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js"
+    },
+    "./docs/*": "./docs/*"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "examples",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json",
+    "generate": "node scripts/build-worker.mjs && node scripts/build-docs.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
+  }
+}

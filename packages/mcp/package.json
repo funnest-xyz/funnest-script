@@ -1,0 +1,53 @@
+{
+  "name": "@funnest/script-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Funnest Script: AI tools (Claude, Cursor, …) read the docs, check scripts, run them on real bars and backtest strategies",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "trading",
+    "indicator",
+    "backtest",
+    "ai",
+    "claude",
+    "cursor",
+    "funnest"
+  ],
+  "license": "Apache-2.0",
+  "author": "Funnest",
+  "homepage": "https://github.com/funnest-xyz/funnest-script/tree/main/packages/mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/funnest-xyz/funnest-script.git",
+    "directory": "packages/mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/funnest-xyz/funnest-script/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "bin": {
+    "funnest-script-mcp": "./dist/server.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@funnest/script": "workspace:*",
+    "@funnest/script-cli": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}
