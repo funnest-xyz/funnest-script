@@ -24,7 +24,7 @@ const market = {
     .regex(/^[A-Z]+:[A-Za-z0-9._-]+$/)
     .optional()
     .describe(`Funnest symbol on ${MARKETS.join(', ')}: e.g. BINANCEF:BTCUSDT (Binance perp), UPBIT:KRW-BTC, BYBIT:ETHUSDT, OKX:BTC-USDT-SWAP. Default BINANCEF:BTCUSDT`),
-  timeframe: z.enum(RESOLUTIONS as unknown as [string, ...string[]]).optional().describe('Bar size: minutes (1 … 240) or 1D / 1W. Default 60'),
+  timeframe: z.enum(RESOLUTIONS as unknown as [string, ...string[]]).optional().describe("Bar size: minutes (1 … 240) or 1D / 1W. Default: the script's own timeframe (indicator({ timeframe })), else 60"),
   bars: z.number().int().min(10).max(1000).optional().describe('How many latest bars (default 500, backtest 1000)'),
   inputs: z.record(z.string(), z.union([z.number(), z.string()])).optional().describe("Input values by label (bool 1/0, select/source by option index, color as '#RRGGBB')"),
   locale,

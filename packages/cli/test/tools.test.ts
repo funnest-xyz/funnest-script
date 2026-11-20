@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runIsolated } from '../src/isolate';
-import { checkScript, findExamples, getFunction, listFunctions, sampleBars } from '../src/tools';
+import { checkScript, declaredTimeframe, findExamples, getFunction, listFunctions, sampleBars } from '../src/tools';
 
 const head = "//@version=2\nindicator({ name: 'x', overlay: true })\n";
 
@@ -46,5 +46,18 @@ describe('type check is about the language, not JavaScript style', () => {
     const r = checkScript(`${head}const mid = (len) => avg(ta.highest(high, len), ta.lowest(low, len))\nplot('m', mid(9))\n`);
     expect(r.types).toEqual([]);
     expect(r.ok).toBe(true);
+  });
+});
+
+describe('run / backtest use the script’s own timeframe when none is given', () => {
+  it('reads indicator({ timeframe }) without running the script; comments and unknown intervals don’t count', () => {
+    expect(declaredTimeframe(`//@version=2\nindicator({ name: 'A', overlay: true, timeframe: '240' })\nplot('c', close)`)).toBe('240');
+    expect(declaredTimeframe(`//@version=2\n// indicator({ name: 'B', overlay: true, timeframe: '5' })\nindicator({ name: 'B', overlay: true })`)).toBeNull();
+    expect(declaredTimeframe(`//@version=2\nindicator({ name: 'C', overlay: true, timeframe: '1M' })`)).toBeNull(); // not fetchable here
+    expect(declaredTimeframe(`//@version=2\nindicator({ name: 'D', overlay: false })\nconst d = request.bars({ timeframe: '1D' })`)).toBeNull();
+  });
+  it('check says what it’s made for', () => {
+    const r = checkScript(`//@version=2\nindicator({ name: 'E', overlay: true, timeframe: '60' })\nplot('c', close)`);
+    expect(r.run.ok && r.run.timeframe).toBe('60');
   });
 });

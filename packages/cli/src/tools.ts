@@ -1,5 +1,5 @@
 import { type Bars, EXAMPLES, GROUPS, type InputValues, isV2, LLMS_TEXT, type Locale, type RunResult, type SpecItem } from '@funnest/script';
-import { fetchBars, type FetchedBars, type Resolution } from './bars';
+import { fetchBars, type FetchedBars, type Resolution, isResolution } from './bars';
 import { fulfil } from './data';
 import { runIsolated } from './isolate';
 import { backtestSummary, summarize, type BacktestSummary, type Failure, type RunSummary } from './summary';
@@ -65,8 +65,20 @@ async function runWithRequests(code: string, bars: FetchedBars, o: RunOptions): 
   return { result: runIsolated(code, bars, o.inputs, o.locale, undefined, data), unavailable };
 }
 
+/**
+ * The interval a script says it's written for (indicator({ timeframe: '60' })), read from the code
+ * without running it (comments don't count): run and backtest use it when none is given, as the
+ * app does. null when it names none or one this tool can't fetch.
+ */
+export function declaredTimeframe(code: string): Resolution | null {
+  const bare = code.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, ' ');
+  const decl = /\bindicator\s*\(\s*\{([^{}]*)\}/.exec(bare)?.[1] ?? '';
+  const tf = /\btimeframe\s*:\s*(['"`])([^'"`]*)\1/.exec(decl)?.[2];
+  return tf && isResolution(tf) ? tf : null;
+}
+
 export async function runScript(code: string, o: RunOptions = {}): Promise<{ symbol: string; resolution: Resolution; result: RunSummary | Failure; unavailable?: string[] }> {
-  const bars = await fetchBars(o.symbol ?? 'BINANCEF:BTCUSDT', o.resolution ?? '60', o.count ?? 500);
+  const bars = await fetchBars(o.symbol ?? 'BINANCEF:BTCUSDT', o.resolution ?? declaredTimeframe(code) ?? '60', o.count ?? 500);
   const { result, unavailable } = await runWithRequests(code, bars, o);
   return { symbol: bars.symbol, resolution: bars.resolution, result: summarize(result, bars), ...(unavailable.length ? { unavailable } : {}) };
 }
@@ -75,7 +87,7 @@ export async function backtestScript(
   code: string,
   o: RunOptions & { feePct?: number; slippagePct?: number } = {},
 ): Promise<{ symbol: string; resolution: Resolution; result: RunSummary | Failure; backtest: BacktestSummary | null; unavailable?: string[] }> {
-  const bars = await fetchBars(o.symbol ?? 'BINANCEF:BTCUSDT', o.resolution ?? '60', o.count ?? 1000);
+  const bars = await fetchBars(o.symbol ?? 'BINANCEF:BTCUSDT', o.resolution ?? declaredTimeframe(code) ?? '60', o.count ?? 1000);
   const { result: r, unavailable } = await runWithRequests(code, bars, o);
   const fee = (o.feePct ?? 0.05) / 100, slippage = (o.slippagePct ?? 0.05) / 100;
   return { symbol: bars.symbol, resolution: bars.resolution, result: summarize(r, bars), backtest: backtestSummary(r, bars, { fee, slippage }), ...(unavailable.length ? { unavailable } : {}) };

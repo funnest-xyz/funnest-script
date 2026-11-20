@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **CLI · MCP**: `run` and `backtest` use the script's own `timeframe` when `--tf` / `timeframe` isn't given
+  (else 60, as before); `check` and `run` say what it's made for (`made for 240`, `timeframe` in JSON).
+
 ## 0.1.1
 
 - **`indicator({ timeframe })`**: a script can name the interval it is tuned for (`'60'` = 1 hour, one of

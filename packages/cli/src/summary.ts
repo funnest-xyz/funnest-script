@@ -23,6 +23,8 @@ export interface RunSummary {
   ok: true;
   name: string;
   overlay: boolean;
+  /** The interval it says it's written for (indicator({ timeframe })), or null. */
+  timeframe: string | null;
   bars: { count: number; from: string; to: string; lastClose: number };
   inputs: { label: string; kind: string; default: number | string; options?: string[] }[];
   plots: PlotSummary[];
@@ -98,6 +100,7 @@ export function summarize(r: RunResult, bars: Bars): RunSummary | Failure {
     ok: true,
     name: r.meta.name,
     overlay: r.meta.overlay,
+    timeframe: r.meta.timeframe ?? null,
     bars: { count: n, from: n ? iso(bars.time[0]!) : '', to: n ? iso(bars.time[n - 1]!) : '', lastClose: n ? bars.close[n - 1]! : Number.NaN },
     inputs: r.inputs.map((i) => ({ label: i.label, kind: i.kind, default: i.default, ...('options' in i ? { options: i.options } : {}) })),
     plots,

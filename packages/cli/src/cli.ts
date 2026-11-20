@@ -21,7 +21,7 @@ Usage:
 
 Options:
   --symbol <SYM>     ${MARKETS.join(' | ')} symbols, e.g. BINANCEF:BTCUSDT, UPBIT:KRW-BTC (default BINANCEF:BTCUSDT)
-  --tf <res>         ${RESOLUTIONS.join(' ')} (default 60)
+  --tf <res>         ${RESOLUTIONS.join(' ')} (default: the script's timeframe, else 60)
   --bars <n>         how many bars, up to 1000 (default 500; backtest 1000)
   --input <k=v>      an input by its label (repeatable); bool 1/0, select/source by index
   --fee <pct>        backtest fee per fill in % (default 0.05)
@@ -76,7 +76,7 @@ function printFailure(f: Failure) {
 }
 
 function printRun(r: RunSummary) {
-  console.log(`✓ ${r.name} · ${r.overlay ? 'on the candles' : 'own pane'} · ${r.bars.count} bars ${r.bars.from} → ${r.bars.to} · last close ${r.bars.lastClose}`);
+  console.log(`✓ ${r.name} · ${r.overlay ? 'on the candles' : 'own pane'}${r.timeframe ? ` · made for ${r.timeframe}` : ''} · ${r.bars.count} bars ${r.bars.from} → ${r.bars.to} · last close ${r.bars.lastClose}`);
   for (const p of r.plots) console.log(`  plot ${p.name}${p.offset ? ` (offset ${p.offset})` : ''}: last ${p.last} · range ${p.min} … ${p.max} · empty ${Math.round(p.empty * 100)}%`);
   if (r.hlines.length) console.log(`  hlines ${r.hlines.join(', ')}`);
   const d = r.drawings;
@@ -99,8 +99,9 @@ export async function main(argv: string[]): Promise<number> {
   const json = !!flags.json;
   const locale: Locale = flags.lang?.[0] === 'en' ? 'en' : flags.lang?.[0] === 'ko' ? 'ko' : systemLocale();
   const out = (v: unknown) => console.log(JSON.stringify(v, null, 2));
-  const tf = flags.tf?.[0] ?? '60';
-  if (!isResolution(tf)) throw new Error(`--tf must be one of ${RESOLUTIONS.join(' ')}.`);
+  // No --tf: the script's own timeframe (indicator({ timeframe })), else 60.
+  const tf = flags.tf?.[0];
+  if (tf !== undefined && !isResolution(tf)) throw new Error(`--tf must be one of ${RESOLUTIONS.join(' ')}.`);
   const common = { symbol: flags.symbol?.[0], resolution: tf, count: flags.bars ? Number(flags.bars[0]) : undefined, inputs: inputs(flags.input), locale };
 
   switch (cmd) {
