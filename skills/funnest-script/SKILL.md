@@ -73,6 +73,11 @@ How it trades (backtest and paper auto-trading alike): a signal on a bar's close
 not); stops and targets are checked inside every bar, the stop wins a bar that touches both; a
 price-series level uses the bar before's value; fee and slippage on every fill.
 
+A strategy tuned for one interval says so in its declaration:
+`indicator({ name: '…', overlay: true, timeframe: '60' })` (one of the timeframes above). Apps
+pick that interval first and run the standard backtest on it; other intervals still run but
+trade more or less often, and differently. Leave it out when any interval suits.
+
 ## Alerts, screener, other data
 
 - `alert(cond, '{symbol} … {close} {time}')`: rings when `cond` is true on a bar that just closed

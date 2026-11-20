@@ -35,7 +35,7 @@ hline(70, { label: '과매수' })
 hline(30)
 `),
     );
-    expect(r.meta).toEqual({ name: 'RSI', overlay: false, precision: null, range: [0, 100] });
+    expect(r.meta).toEqual({ name: 'RSI', overlay: false, precision: null, range: [0, 100], timeframe: null });
     expect(r.inputs).toEqual([{ label: '기간', kind: 'int', default: 14, min: 2, max: 100, step: 1 }]);
     expect(r.plots[0]).toMatchObject({ name: 'RSI', color: '#7048E8', kind: 'line', width: 2 });
     expect(r.plots[0]!.values).toHaveLength(N);
@@ -44,6 +44,19 @@ hline(30)
       { value: 30, label: null, color: null, style: 'dashed', width: 1 },
     ]);
     expect(r.warnings).toEqual([]);
+  });
+
+  it('timeframe: the interval the script is written for, checked against the known ones', () => {
+    const r = ok(run(`//@version=2
+indicator({ name: 'T', overlay: true, timeframe: '60' })
+plot('c', close)
+`));
+    expect(r.meta.timeframe).toBe('60');
+    const bad = run(`//@version=2
+indicator({ name: 'T', overlay: true, timeframe: '1h' })
+plot('c', close)
+`);
+    expect(failed(bad).code).toBe('BAD_ARG');
   });
 
   it('input kinds: values come in by label as numbers (bool 0/1, select / source by index)', () => {

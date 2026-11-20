@@ -2,7 +2,7 @@ import { createLib, type Bars } from './lib';
 import { colorApi, createDrawing, DRAW_LIMITS, isColor, type BackgroundOut, type BarColorsOut, type BoxOut, type FillOut, type HlineOut, type LabelOut, type LineOut, type PlotOut, type ShapeOut, type TableOut } from './draw';
 import { Cond, ScriptError, Series, isSeries, type ErrorCode, type Locale, type Text } from './series';
 import { entryCount, strategyBuffers, type Level, type Levels, type Strategy } from './strategy';
-import { createRequests, type RequestData, type RequestSpec } from './request';
+import { REQUEST_TIMEFRAMES, createRequests, type RequestData, type RequestSpec } from './request';
 
 export { DATA_NAMES, DATA_SOURCES, REQUEST_TIMEFRAMES, alignBars, barsKey, dataKey, spacingOf, type DataName, type RequestData, type RequestedBars, type RequestSpec, type RequestTimeframe } from './request';
 
@@ -69,6 +69,8 @@ export interface Meta {
   overlay: boolean;
   precision: number | null;
   range: [number, number] | null;
+  /** The interval the script is written for ('60' = 1 hour), or null when any interval suits it. */
+  timeframe: string | null;
 }
 
 export type RunResult =
@@ -262,7 +264,10 @@ export function execute(code: string, bars: Bars, inputValues: InputValues = {},
     if (x.range !== undefined && !range) throw err('BAD_ARG', 'indicator의 range는 [최소, 최대] 숫자 두 개여야 해요. 예: [0, 100]', 'indicator: range must be [min, max], e.g. [0, 100].');
     const precision = x.precision === undefined ? null : Number(x.precision);
     if (precision !== null && !(Number.isInteger(precision) && precision >= 0 && precision <= 10)) throw err('BAD_ARG', 'indicator의 precision은 0~10 사이 정수여야 해요.', 'indicator: precision must be a whole number 0–10.');
-    meta = { name: text(x.name, 'indicator', 'name'), overlay: x.overlay, precision, range };
+    const timeframe = x.timeframe === undefined ? null : String(x.timeframe);
+    if (timeframe !== null && !(REQUEST_TIMEFRAMES as readonly string[]).includes(timeframe))
+      throw err('BAD_ARG', `indicator의 timeframe은 ${REQUEST_TIMEFRAMES.map((t) => `'${t}'`).join(', ')} 중 하나여야 해요. 예: '60' (1시간)`, `indicator: timeframe must be one of ${REQUEST_TIMEFRAMES.map((t) => `'${t}'`).join(', ')}, e.g. '60' (1 hour).`);
+    meta = { name: text(x.name, 'indicator', 'name'), overlay: x.overlay, precision, range, timeframe };
   }
 
   // ── inputs ───────────────────────────────────────────────────────

@@ -26,8 +26,8 @@ type DataName = 'funding' | 'openInterest' | 'longShortRatio' | 'topLongShortRat
 /** Where an input is shown: a section (group), a shared row (inline), a note (tooltip). */
 type InputOptions = { group?: string; inline?: string; tooltip?: string };
 
-/** Name and place: overlay true draws on the candles, false in its own pane. Call once, first. range fixes the pane’s scale. */
-declare function indicator(o: { name: string; overlay: boolean; precision?: number; range?: [number, number] }): void;
+/** Name and place: overlay true draws on the candles, false in its own pane. Call once, first. range fixes the pane’s scale. timeframe is the interval the script is tuned for ('60' = 1 hour): apps pick it first and run the standard backtest on it. Other intervals still run, but trade more or less often and differently. */
+declare function indicator(o: { name: string; overlay: boolean; precision?: number; range?: [number, number]; timeframe?: string }): void;
 
 /** Open price per bar */
 declare const open: Series;

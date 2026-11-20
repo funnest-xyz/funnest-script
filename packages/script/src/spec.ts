@@ -54,9 +54,9 @@ export const GROUPS: SpecGroup[] = [
     items: [
       {
         name: 'indicator',
-        ts: 'function indicator(o: { name: string; overlay: boolean; precision?: number; range?: [number, number] }): void',
-        ko: '지표 이름과 그릴 곳(overlay: true면 캔들 위, false면 아래 칸). 코드 맨 앞에서 한 번만. range는 아래 칸 세로 범위 고정',
-        en: 'Name and place: overlay true draws on the candles, false in its own pane. Call once, first. range fixes the pane’s scale.',
+        ts: 'function indicator(o: { name: string; overlay: boolean; precision?: number; range?: [number, number]; timeframe?: string }): void',
+        ko: "지표 이름과 그릴 곳(overlay: true면 캔들 위, false면 아래 칸). 코드 맨 앞에서 한 번만. range는 아래 칸 세로 범위 고정. timeframe은 이 스크립트가 맞춰진 주기('60' = 1시간)로, 앱이 그 주기를 먼저 고르고 표준 백테스트도 그 주기로 돌려요. 다른 주기에서도 돌지만 사고파는 횟수와 결과가 달라져요",
+        en: "Name and place: overlay true draws on the candles, false in its own pane. Call once, first. range fixes the pane’s scale. timeframe is the interval the script is tuned for ('60' = 1 hour): apps pick it first and run the standard backtest on it. Other intervals still run, but trade more or less often and differently.",
         example: "indicator({ name: 'RSI', overlay: false, range: [0, 100] })",
       },
     ],

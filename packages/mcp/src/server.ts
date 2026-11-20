@@ -12,7 +12,7 @@ import { z } from 'zod';
 import type { Locale } from '@funnest/script';
 import { backtestScript, checkScript, docs, findExamples, getFunction, listFunctions, MARKETS, type Resolution, RESOLUTIONS, runScript } from '@funnest/script-cli';
 
-const server = new McpServer({ name: 'funnest-script', version: '0.1.0' });
+const server = new McpServer({ name: 'funnest-script', version: '0.1.1' });
 
 const DEFAULT_LOCALE: Locale = /^ko/i.test(Intl.DateTimeFormat().resolvedOptions().locale) ? 'ko' : 'en';
 const locale = z.enum(['ko', 'en']).optional().describe("Message language (default: the machine's)");

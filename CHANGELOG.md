@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.1.1
+
+- **`indicator({ timeframe })`**: a script can name the interval it is tuned for (`'60'` = 1 hour, one of
+  `REQUEST_TIMEFRAMES`). It shows in `meta.timeframe` (null when left out); apps pick it first and
+  run the standard backtest on it. Other intervals still run. An unknown interval is a `BAD_ARG`.
+
+## 0.1.0
 
 First open-source release of the language Funnest runs.
 
