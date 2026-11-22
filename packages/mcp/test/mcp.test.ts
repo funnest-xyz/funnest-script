@@ -27,7 +27,12 @@ const call = async (name: string, args: Record<string, unknown>) => {
 describe('MCP server', { timeout: 30_000 }, () => {
   it('lists the tools', async () => {
     const names = (await client.listTools()).tools.map((t) => t.name);
-    expect(names).toEqual(['get_docs', 'list_functions', 'get_function', 'get_examples', 'check_script', 'run_script', 'backtest_script']);
+    expect(names).toEqual(['get_docs', 'list_functions', 'get_function', 'get_examples', 'check_script', 'run_script', 'backtest_script', 'open_in_funnest']);
+  });
+
+  it('open_in_funnest: a link that carries the script after #script=', async () => {
+    const r = await call('open_in_funnest', { code: "//@version=2\nindicator({ name: 'x', overlay: true })\nplot('c', close)\n" });
+    expect(r.text).toMatch(/^https:\/\/funnest\.xyz\/trade\/#script=[A-Za-z0-9_-]+$/);
   });
 
   it('check_script: a typo is an error with its line, the fix passes', async () => {

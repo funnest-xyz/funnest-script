@@ -61,3 +61,19 @@ describe('run / backtest use the script’s own timeframe when none is given', (
     expect(r.run.ok && r.run.timeframe).toBe('60');
   });
 });
+
+describe('open in Funnest', () => {
+  it('puts the script, deflated, after #script= (nothing in the query, nothing uploaded)', async () => {
+    const { openLink } = await import('../src/tools');
+    const { inflateRawSync } = await import('node:zlib');
+    const code = `${head}plot('EMA', ta.ema(close, 20)) // 한글도\n`;
+    const url = openLink(code);
+    expect(url.startsWith('https://funnest.xyz/trade/#script=')).toBe(true);
+    expect(new URL(url).search).toBe('');
+    const packed = url.split('#script=')[1]!;
+    expect(packed).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(inflateRawSync(Buffer.from(packed, 'base64url')).toString('utf8')).toBe(code);
+    expect(() => openLink('  ')).toThrow();
+    expect(() => openLink('x'.repeat(60_001))).toThrow();
+  });
+});

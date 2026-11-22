@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.1.2
 
+- **Open in Funnest**: `funnest-script open <file>` (CLI) and `open_in_funnest` (MCP) give a link
+  that opens the script in Funnest's editor, unsaved. The code rides in the link's `#` part
+  (deflate + base64url): nothing is uploaded or stored.
 - **CLI · MCP**: `run` and `backtest` use the script's own `timeframe` when `--tf` / `timeframe` isn't given
   (else 60, as before); `check` and `run` say what it's made for (`made for 240`, `timeframe` in JSON).
 

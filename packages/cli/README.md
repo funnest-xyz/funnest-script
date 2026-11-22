@@ -10,6 +10,7 @@ npx @funnest/script-cli backtest my-script.js --symbol UPBIT:KRW-BTC --tf 1D --b
 npx @funnest/script-cli docs                               # llms.txt, for an AI assistant
 npx @funnest/script-cli fn ta.supertrend                   # one function
 npx @funnest/script-cli examples cross                     # example scripts
+npx @funnest/script-cli open my-script.js                 # a link that opens it in Funnest's editor
 ```
 
 Options: `--symbol` (BINANCEF · BINANCE · UPBIT · BYBIT · OKX), `--tf` (1 3 5 15 30 60 120 240 1D 1W),

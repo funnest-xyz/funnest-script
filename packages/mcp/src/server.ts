@@ -10,9 +10,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import type { Locale } from '@funnest/script';
-import { backtestScript, checkScript, docs, findExamples, getFunction, listFunctions, MARKETS, type Resolution, RESOLUTIONS, runScript } from '@funnest/script-cli';
+import { backtestScript, checkScript, docs, findExamples, getFunction, listFunctions, MARKETS, openLink, type Resolution, RESOLUTIONS, runScript } from '@funnest/script-cli';
 
-const server = new McpServer({ name: 'funnest-script', version: '0.1.1' });
+const server = new McpServer({ name: 'funnest-script', version: '0.1.2' });
 
 const DEFAULT_LOCALE: Locale = /^ko/i.test(Intl.DateTimeFormat().resolvedOptions().locale) ? 'ko' : 'en';
 const locale = z.enum(['ko', 'en']).optional().describe("Message language (default: the machine's)");
@@ -113,6 +113,17 @@ server.registerTool(
     const r = await backtestScript(c, { symbol, resolution: timeframe as Resolution | undefined, count: bars, inputs, locale: l, feePct: fee_pct, slippagePct: slippage_pct });
     return { content: [text(r)], isError: !r.result.ok || !r.backtest };
   },
+);
+
+server.registerTool(
+  'open_in_funnest',
+  {
+    title: 'Open in Funnest',
+    description:
+      "A link that opens the script in Funnest's editor (지표 만들기) in a new tab, unsaved — give it to the user with your final script so they don't have to copy and paste the code. The code travels in the link's # part: nothing is uploaded or stored.",
+    inputSchema: { code },
+  },
+  async ({ code: c }) => ({ content: [text(openLink(c))] }),
 );
 
 await server.connect(new StdioServerTransport());

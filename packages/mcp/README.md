@@ -17,6 +17,7 @@ Other clients: command `npx`, args `["-y", "@funnest/script-mcp"]`.
 | `check_script` | Type-check and test-run (no network): errors with line numbers and how to fix them |
 | `run_script` | Run on real bars: each line's last value and range, signals, drawings, alerts |
 | `backtest_script` | Backtest a strategy: return vs buy & hold, win rate, drawdown, trades |
+| `open_in_funnest` | A link that opens the script in Funnest's editor (the code stays in the link's `#` part) |
 
 Runs on your machine; market data comes from the exchanges' public APIs (fixed hosts only — it
 never fetches an address it's given).

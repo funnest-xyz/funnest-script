@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { DTS_TEXT, type Locale } from '@funnest/script';
 import { isResolution, MARKETS, RESOLUTIONS } from './bars';
 import type { Failure, RunSummary } from './summary';
-import { backtestScript, checkScript, docs, findExamples, getFunction, listFunctions, runScript } from './tools';
+import { backtestScript, checkScript, docs, findExamples, getFunction, listFunctions, openLink, runScript } from './tools';
 
 /**
  * funnest-script — check, run and backtest Funnest Script v2 files from a terminal (and from AI
@@ -18,6 +18,7 @@ Usage:
   funnest-script docs [--dts]                      the language for AI assistants (llms.txt) or its types
   funnest-script fn <name>                         one function: signature, description, example
   funnest-script examples [query]                  example scripts
+  funnest-script open <file>                       a link that opens the script in Funnest (지표 만들기)
 
 Options:
   --symbol <SYM>     ${MARKETS.join(' | ')} symbols, e.g. BINANCEF:BTCUSDT, UPBIT:KRW-BTC (default BINANCEF:BTCUSDT)
@@ -144,6 +145,12 @@ export async function main(argv: string[]): Promise<number> {
         }
       }
       return r.result.ok && r.backtest ? 0 : 1;
+    }
+    case 'open': {
+      const url = openLink(readCode(rest[0]));
+      if (json) out({ url });
+      else console.log(url);
+      return 0;
     }
     case 'docs':
       console.log(flags.dts ? DTS_TEXT : docs());

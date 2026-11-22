@@ -22,7 +22,9 @@ first script of a session; look one name up with `get_function` / `npx @funnest/
 4. **Backtest** strategies — `backtest_script` / `npx @funnest/script-cli backtest file.js --symbol UPBIT:KRW-BTC --tf 1D --bars 1000`.
    Report return vs buy & hold, max drawdown, trades and win rate honestly; don't tune inputs to
    one stretch of history and call it an edge.
-5. **Reply with the code** (one script). The user pastes it into Funnest → 지표 만들기.
+5. **Reply with the code and a link to open it** (one script): `open_in_funnest` (MCP) or
+   `npx @funnest/script-cli open file.js`. The link opens Funnest's editor with the script in it, so
+   the user doesn't copy and paste. Show the code too, for reading.
 
 Symbols: `BINANCEF:BTCUSDT` (Binance futures), `BINANCE:BTCUSDT`, `UPBIT:KRW-BTC`, `BYBIT:BTCUSDT`,
 `OKX:BTC-USDT-SWAP`. Timeframes: `1 3 5 15 30 60 120 240 1D 1W`.

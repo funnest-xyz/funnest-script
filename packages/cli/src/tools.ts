@@ -1,3 +1,4 @@
+import { deflateRawSync } from 'node:zlib';
 import { type Bars, EXAMPLES, GROUPS, type InputValues, isV2, LLMS_TEXT, type Locale, type RunResult, type SpecItem } from '@funnest/script';
 import { fetchBars, type FetchedBars, type Resolution, isResolution } from './bars';
 import { fulfil } from './data';
@@ -114,4 +115,18 @@ export function getFunction(name: string): (SpecItem & { group: string }) | null
 export function findExamples(query = ''): { file: string; code: string }[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   return EXAMPLES.filter((e) => words.every((w) => `${e.file}\n${e.code}`.toLowerCase().includes(w)));
+}
+
+/** Where Funnest's terminal is: the script goes after #script= (never sent to a server). */
+export const FUNNEST_TRADE_URL = 'https://funnest.xyz/trade/';
+
+/**
+ * A link that opens the script in Funnest's editor (지표 만들기), in a new tab, unsaved: the code
+ * deflated and base64url'd after #script= — the part of an address browsers keep to themselves,
+ * so nothing is uploaded or stored anywhere. Up to 60,000 characters (the app's limit).
+ */
+export function openLink(code: string): string {
+  if (!code.trim()) throw new Error('The script is empty.');
+  if (code.length > 60_000) throw new Error('Scripts are up to 60,000 characters.');
+  return `${FUNNEST_TRADE_URL}#script=${deflateRawSync(Buffer.from(code, 'utf8'), { level: 9 }).toString('base64url')}`;
 }
