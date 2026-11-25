@@ -17,7 +17,7 @@ const examples = readdirSync(join(root, 'examples'))
   .filter((f) => f.endsWith('.js'))
   .sort()
   .map((file) => ({ file, code: lf(readFileSync(join(root, 'examples', file), 'utf8')).trim() }));
-// Larger scripts (ports of popular indicators): in the app's templates and the tests, not in llms.txt.
+// Larger examples written for Funnest: in the app's templates and the tests, not in llms.txt.
 const showcase = readdirSync(join(root, 'showcase'))
   .filter((f) => f.endsWith('.js'))
   .sort()
@@ -87,7 +87,7 @@ export const LLMS_TEXT = ${JSON.stringify(llmsText)};
 export const DTS_TEXT = ${JSON.stringify(dtsText)};
 /** The example scripts (examples/*.js). */
 export const EXAMPLES: { file: string; code: string }[] = ${JSON.stringify(examples)};
-/** Larger scripts (showcase/*.js): ports of popular indicators, for the app's templates. */
+/** Larger examples (showcase/*.js), written for Funnest: for the app's templates. */
 export const SHOWCASE: { file: string; code: string }[] = ${JSON.stringify(showcase)};
 `;
 if (process.argv.includes('--check')) {

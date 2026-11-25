@@ -157,11 +157,11 @@ describe('more moving averages', () => {
   });
 });
 
-describe('showcase: a long Pine indicator, ported', () => {
+describe('showcase: 이평선 묶음 + 지지 · 저항', () => {
   it('runs cleanly and draws everything it should', async () => {
     const { SHOWCASE } = await import('../src/generated/llms');
-    const port = SHOWCASE.find((s) => s.file === 'ma12-sr.js')!;
-    // 600 bars of a wave with volume, so pivots, crosses and volume zones all appear.
+    const example = SHOWCASE.find((s) => s.file === 'ma-bundle-sr.js')!;
+    // 600 bars of a wave, so turns, crosses and both orders all appear.
     const n = 600;
     const c = Array.from({ length: n }, (_, i) => 100 + Math.sin(i / 20) * 15 + Math.sin(i / 5) * 3 + i * 0.02);
     const long: Bars = {
@@ -172,20 +172,20 @@ describe('showcase: a long Pine indicator, ported', () => {
       volume: Float64Array.from(c, (_, i) => 1000 + ((i * 37) % 900)),
       time: Float64Array.from(c, (_, i) => Date.UTC(2026, 0, 1) + i * 3_600_000),
     };
-    const r = execute(port.code, long, {}, { locale: 'ko' });
+    const r = execute(example.code, long, {}, { locale: 'ko' });
     if (!r.ok) throw new Error(`${r.code} line ${r.line}: ${r.error}`);
-    expect(r.inputs.length).toBeGreaterThan(200);
-    expect(r.plots.length).toBe(12);
+    expect(r.plots.map((p) => p.name)).toEqual(['EMA 5', 'EMA 10', 'EMA 20', 'EMA 60', 'EMA 120', 'EMA 240']);
     expect(r.fills.length).toBe(1);
-    expect(r.tables.length).toBe(4);
-    expect(r.shapes.some((s) => s.text === 'GC1')).toBe(true);
+    expect(r.tables.length).toBe(1);
+    expect(r.shapes.some((s) => s.text === 'GC')).toBe(true);
     expect(r.boxes.length).toBeGreaterThan(0);
-    expect(r.lines.length).toBeGreaterThan(0);
-    expect(r.labels.length).toBeGreaterThan(12);
-    // Every MA type computes.
-    const all = Object.fromEntries(['SMA', 'EMA', 'WMA', 'VWMA', 'SMMA', 'HMA', 'DEMA', 'TEMA', 'LSMA', 'ZLSMA', 'ALMA', 'ALSMA'].map((t, k) => [`MA ${String(k + 1).padStart(2, '0')} 종류`, k]));
-    const types = execute(port.code, long, all, { locale: 'ko' });
-    if (!types.ok) throw new Error(types.error);
-    for (const p of types.plots) expect(Number.isFinite(p.values[n - 1]!), p.name).toBe(true);
+    expect(r.boxes.length).toBeLessThanOrEqual(6);
+    // Every kind computes; other lengths are taken from the text.
+    for (const [index, kind] of [[1, 'SMA'], [2, 'WMA'], [3, 'HMA']] as const) {
+      const k = execute(example.code, long, { 종류: index, '기간 (쉼표로, 최대 8개)': '7, 21, 50, x, 21' }, { locale: 'ko' });
+      if (!k.ok) throw new Error(k.error);
+      expect(k.plots.map((p) => p.name)).toEqual([`${kind} 7`, `${kind} 21`, `${kind} 50`]);
+      for (const p of k.plots) expect(Number.isFinite(p.values[n - 1]!), p.name).toBe(true);
+    }
   });
 });

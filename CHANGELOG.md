@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.3
+
+- **Showcase**: the long example is now `showcase/ma-bundle-sr.js` ("이평선 묶음 + 지지 · 저항"),
+  written from scratch for Funnest: moving averages of the usual lengths (5 · 10 · 20 · 60 · 120 · 240,
+  any kind or list), bullish / bearish alignment, golden and dead crosses with alerts, support and
+  resistance zones where price turned several times, and a summary table. It replaces
+  `showcase/ma12-sr.js`, a port of a TradingView community script whose author and license we
+  couldn't confirm; please don't use that file from earlier versions.
+
 ## 0.1.2
 
 - **Open in Funnest**: `funnest-script open <file>` (CLI) and `open_in_funnest` (MCP) give a link
