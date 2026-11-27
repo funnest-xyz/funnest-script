@@ -1,4 +1,5 @@
 import { Cond, ScriptError, Series, empty, isSeries, type Text } from './series';
+import { PERIODS, isTimeZone, offsets, periodKeys, type Period } from './time';
 
 /**
  * The math every script gets: `ta.*` indicators and the series helpers (sub, gt, map…).
@@ -26,8 +27,18 @@ type Src = Series | Cond | Float64Array | Uint8Array | number;
 const NAN = Number.NaN;
 const bad = (text: Text, hint?: Text) => new ScriptError('BAD_ARG', text, hint);
 
-export function createLib(bars: Bars) {
+/** Where the bars come from: the market's time zone sets where a day (or week…) starts. */
+export interface LibContext {
+  /** Default zone for day / week / month boundaries ('UTC' for crypto, 'Asia/Seoul' for Korean stocks). */
+  timezone?: string;
+}
+
+/** Different time zones one run may use (each is an array per bar). */
+const MAX_ZONES = 4;
+
+export function createLib(bars: Bars, ctx: LibContext = {}) {
   const n = bars.close.length;
+  const defaultZone = ctx.timezone && isTimeZone(ctx.timezone) ? ctx.timezone : 'UTC';
 
   /** A source as a Series (a number becomes that number on every bar). */
   const S = (v: unknown, fn: string, arg = 'src'): Series => {
@@ -161,7 +172,7 @@ export function createLib(bars: Bars) {
    * Highest / lowest of the last `length` values in one pass (a queue of candidates), NaN while
    * the window holds a NaN — the same as comparing the whole window every bar, without the cost.
    */
-  function extreme(src: Src, length: number, fn: string, higher: boolean): Series {
+  function extreme(src: Src, length: number, fn: string, higher: boolean, ago = false): Series {
     const s = S(src, fn), p = P(length, fn), o = out();
     const q = new Int32Array(n);
     let head = 0, tail = 0, lastNaN = -1;
@@ -169,16 +180,20 @@ export function createLib(bars: Bars) {
       const v = s[i]!;
       if (Number.isNaN(v)) lastNaN = i;
       else {
+        // `<=` drops an equal older value: among equal extremes the most recent one stays.
         while (tail > head && (higher ? s[q[tail - 1]!]! <= v : s[q[tail - 1]!]! >= v)) tail--;
         q[tail++] = i;
       }
       while (tail > head && q[head]! <= i - p) head++;
-      if (i >= p - 1 && lastNaN <= i - p && tail > head) o[i] = s[q[head]!]!;
+      if (i >= p - 1 && lastNaN <= i - p && tail > head) o[i] = ago ? i - q[head]! : s[q[head]!]!;
     }
     return o;
   }
   const highest = (src: Src, length: number) => extreme(src, length, 'ta.highest', true);
   const lowest = (src: Src, length: number) => extreme(src, length, 'ta.lowest', false);
+  /** Bars back to the highest / lowest of the last `length` values (0 = this bar; the most recent one on a tie). */
+  const highestbars = (src: Src, length: number) => extreme(src, length, 'ta.highestbars', true, true);
+  const lowestbars = (src: Src, length: number) => extreme(src, length, 'ta.lowestbars', false, true);
   function change(src: Src, length = 1): Series {
     const s = S(src, 'ta.change'), p = P(length, 'ta.change'), o = out();
     for (let i = p; i < n; i++) o[i] = s[i]! - s[i - p]!;
@@ -407,6 +422,428 @@ export function createLib(bars: Bars) {
     return o;
   }
 
+  // ── time: days, weeks, months in the market's zone ──────────────
+  const zones = new Map<string, Float64Array>();
+  /** Each bar's offset from UTC in `tz` (a zone Intl knows), worked out once per zone. */
+  function offsetsIn(tz: unknown, fn: string): Float64Array {
+    const zone = tz === undefined || tz === null ? defaultZone : tz;
+    if (!isTimeZone(zone))
+      throw bad(
+        { ko: `${fn}: 시간대 '${String(zone).slice(0, 40)}'을(를) 몰라요.`, en: `${fn}: unknown time zone '${String(zone).slice(0, 40)}'.` },
+        { ko: "'Asia/Seoul', 'UTC', 'America/New_York'처럼 써요.", en: "Write it like 'Asia/Seoul', 'UTC' or 'America/New_York'." },
+      );
+    const have = zones.get(zone);
+    if (have) return have;
+    if (zones.size >= MAX_ZONES) throw new ScriptError('LIMIT', { ko: `시간대는 한 스크립트에 ${MAX_ZONES}가지까지예요.`, en: `At most ${MAX_ZONES} time zones per script.` });
+    const off = offsets(bars.time, zone);
+    zones.set(zone, off);
+    return off;
+  }
+  /** A period ('D' 'W' 'M' 'Y') or a condition, as "a new period starts here" per bar. */
+  function startsOf(anchor: unknown, fn: string, tz?: unknown): Uint8Array {
+    if (typeof anchor === 'string') {
+      if (!(PERIODS as readonly string[]).includes(anchor))
+        throw bad({ ko: `${fn}의 anchor는 'D'(하루) · 'W'(주) · 'M'(달) · 'Y'(해)이거나 조건이에요.`, en: `${fn}: anchor is 'D' (day), 'W' (week), 'M' (month), 'Y' (year) or a condition.` });
+      const keys = periodKeys(bars.time, offsetsIn(tz, fn), anchor as Period), o = cond();
+      for (let i = 0; i < n; i++) o[i] = i === 0 || keys[i] !== keys[i - 1] ? 1 : 0;
+      return o;
+    }
+    const c = C(anchor, fn, 'anchor');
+    if (c.length !== n) throw bad({ ko: `${fn}의 anchor 길이가 봉 수와 달라요.`, en: `${fn}: anchor's length differs from the number of bars.` });
+    return c;
+  }
+
+  // ── more indicators ─────────────────────────────────────────────
+  /** Volume-weighted average price since the start of each period (or since the anchor condition was last true). */
+  function vwapOf(src: Src, anchor: unknown, fn: string, mult?: number) {
+    const s = S(src, fn), starts = startsOf(anchor, fn), v = bars.volume;
+    const mid = out(), upper = out(), lower = out();
+    let pv = 0, vol = 0, pv2 = 0;
+    for (let i = 0; i < n; i++) {
+      if (starts[i]) pv = vol = pv2 = 0;
+      const x = s[i]!, w = v[i]!;
+      if (!Number.isNaN(x) && w > 0) {
+        pv += x * w;
+        pv2 += x * x * w;
+        vol += w;
+      }
+      if (vol > 0) {
+        const m = pv / vol;
+        mid[i] = m;
+        if (mult !== undefined) {
+          const sd = Math.sqrt(Math.max(0, pv2 / vol - m * m));
+          upper[i] = m + mult * sd;
+          lower[i] = m - mult * sd;
+        }
+      }
+    }
+    return { mid, upper, lower };
+  }
+  const hlc3 = () => map((i) => (bars.high[i]! + bars.low[i]! + bars.close[i]!) / 3);
+  const vwap = (src?: Src, anchor: unknown = 'D') => vwapOf(src ?? hlc3(), anchor, 'ta.vwap').mid;
+  function vwapbands(src?: Src, anchor: unknown = 'D', mult = 1): { vwap: Series; upper: Series; lower: Series } {
+    const m = Number(mult);
+    if (!(Number.isFinite(m) && m >= 0)) throw bad({ ko: 'ta.vwapbands의 mult에는 0 이상의 숫자가 필요해요.', en: 'ta.vwapbands: mult must be a number of 0 or more.' });
+    const r = vwapOf(src ?? hlc3(), anchor, 'ta.vwapbands', m);
+    return { vwap: r.mid, upper: r.upper, lower: r.lower };
+  }
+
+  /** Parabolic SAR (Wilder), as the usual reference implementation: start, step and the cap of the acceleration factor. */
+  function sar(start = 0.02, inc = 0.02, max = 0.2): Series {
+    const a0 = Number(start), da = Number(inc), am = Number(max);
+    if (!(a0 > 0 && da >= 0 && am >= a0 && am <= 1)) throw bad({ ko: 'ta.sar은 0 < start ≤ max ≤ 1, inc ≥ 0이에요. 예: ta.sar(0.02, 0.02, 0.2)', en: 'ta.sar: 0 < start ≤ max ≤ 1 and inc ≥ 0, e.g. ta.sar(0.02, 0.02, 0.2).' });
+    const h = bars.high, l = bars.low, c = bars.close, o = out();
+    let result = NAN, maxMin = NAN, acc = a0, below = false;
+    for (let i = 1; i < n; i++) {
+      let first = false;
+      if (i === 1) {
+        below = c[1]! > c[0]!;
+        maxMin = below ? h[1]! : l[1]!;
+        result = below ? l[0]! : h[0]!;
+        first = true;
+        acc = a0;
+      }
+      result += acc * (maxMin - result);
+      if (below) {
+        if (result > l[i]!) {
+          first = true;
+          below = false;
+          result = Math.max(h[i]!, maxMin);
+          maxMin = l[i]!;
+          acc = a0;
+        }
+      } else if (result < h[i]!) {
+        first = true;
+        below = true;
+        result = Math.min(l[i]!, maxMin);
+        maxMin = h[i]!;
+        acc = a0;
+      }
+      if (!first) {
+        if (below && h[i]! > maxMin) (maxMin = h[i]!), (acc = Math.min(acc + da, am));
+        else if (!below && l[i]! < maxMin) (maxMin = l[i]!), (acc = Math.min(acc + da, am));
+      }
+      if (below) {
+        result = Math.min(result, l[i - 1]!);
+        if (i > 1) result = Math.min(result, l[i - 2]!);
+      } else {
+        result = Math.max(result, h[i - 1]!);
+        if (i > 1) result = Math.max(result, h[i - 2]!);
+      }
+      o[i] = result;
+    }
+    return o;
+  }
+
+  /** Keltner channels: EMA ± mult × EMA of the true range (or of high − low). */
+  function kc(src: Src, length = 20, mult = 2, useTrueRange = true): { upper: Series; mid: Series; lower: Series } {
+    const m = Number(mult);
+    if (!Number.isFinite(m)) throw bad({ ko: 'ta.kc의 mult에는 숫자가 필요해요.', en: 'ta.kc: mult must be a number.' });
+    const p = P(length, 'ta.kc'), mid = ema(src, p);
+    const span = useTrueRange === false ? map((i) => bars.high[i]! - bars.low[i]!) : trueRange(false);
+    const r = ema(span, p);
+    return { upper: map((i) => mid[i]! + m * r[i]!), mid, lower: map((i) => mid[i]! - m * r[i]!) };
+  }
+  /** Keltner channel width: (upper − lower) / mid. */
+  function kcw(src: Src, length = 20, mult = 2, useTrueRange = true): Series {
+    const k = kc(src, length, mult, useTrueRange);
+    return map((i) => (k.upper[i]! - k.lower[i]!) / k.mid[i]!);
+  }
+  /** Bollinger band width: (upper − lower) / mid. */
+  const bbw = (src: Src, length = 20, mult = 2) => bb(src, length, mult).width;
+  /** Williams %R: −100 (at the low of the period) … 0 (at its high). */
+  function wpr(length = 14): Series {
+    const p = P(length, 'ta.wpr'), hh = highest(bars.high as Series, p), ll = lowest(bars.low as Series, p);
+    return map((i) => (hh[i] === ll[i] ? NAN : (100 * (bars.close[i]! - hh[i]!)) / (hh[i]! - ll[i]!)));
+  }
+  /** Chande momentum oscillator: 100 × (sum of gains − sum of losses) / (their total) over length. */
+  function cmo(src: Src, length = 9): Series {
+    const s = S(src, 'ta.cmo'), p = P(length, 'ta.cmo'), o = out();
+    for (let i = p; i < n; i++) {
+      let up = 0, down = 0;
+      for (let j = 0; j < p; j++) {
+        const d = s[i - j]! - s[i - j - 1]!;
+        if (d >= 0) up += d;
+        else down -= d;
+      }
+      o[i] = up + down === 0 ? 0 : (100 * (up - down)) / (up + down);
+    }
+    return o;
+  }
+  /** True strength index, −1…1: the change smoothed twice (EMA long, then short) over the absolute change smoothed the same way. */
+  function tsi(src: Src, short = 13, long = 25): Series {
+    const s = S(src, 'ta.tsi'), sp = P(short, 'ta.tsi', 'short'), lp = P(long, 'ta.tsi', 'long');
+    const pc = change(s, 1), apc = map((i) => Math.abs(pc[i]!));
+    const num = ema(ema(pc, lp), sp), den = ema(ema(apc, lp), sp);
+    return map((i) => (den[i] === 0 ? 0 : num[i]! / den[i]!));
+  }
+  /** Center of gravity (Ehlers): −Σ src[k]·(k+1) / Σ src[k] over the last length values, k bars back. */
+  function cog(src: Src, length = 10): Series {
+    const s = S(src, 'ta.cog'), p = P(length, 'ta.cog'), o = out();
+    for (let i = p - 1; i < n; i++) {
+      let num = 0, sum = 0;
+      for (let k = 0; k < p; k++) {
+        num += s[i - k]! * (k + 1);
+        sum += s[i - k]!;
+      }
+      o[i] = sum === 0 ? NAN : -num / sum;
+    }
+    return o;
+  }
+  /** Symmetrically weighted MA of the last 4 values (1/6, 2/6, 2/6, 1/6). */
+  function swma(src: Src): Series {
+    const s = S(src, 'ta.swma'), o = out();
+    for (let i = 3; i < n; i++) o[i] = (s[i - 3]! + 2 * s[i - 2]! + 2 * s[i - 1]! + s[i]!) / 6;
+    return o;
+  }
+
+  // ── statistics over a window ────────────────────────────────────
+  /** First index in sorted w[0..len) with w[k] ≥ x (or > x with `after`). */
+  const bound = (w: Float64Array, len: number, x: number, after: boolean) => {
+    let lo = 0, hi = len;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (after ? w[mid]! <= x : w[mid]! < x) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
+  /**
+   * The last `p` values kept sorted (a window holding a NaN starts over after it): each bar costs a
+   * binary search and one memmove, so medians and percentiles stay fast for long windows.
+   * `read` gets the sorted window (oldest value already out, this bar's value in) — or, with
+   * `before`, the previous p values without this bar's.
+   */
+  function sortedWindow(s: Float64Array, p: number, read: (w: Float64Array, len: number, v: number) => number, before = false): Series {
+    const o = out(), w = new Float64Array(p);
+    let len = 0;
+    for (let i = 0; i < n; i++) {
+      const v = s[i]!;
+      if (Number.isNaN(v)) {
+        len = 0;
+        continue;
+      }
+      if (before && len === p) o[i] = read(w, len, v);
+      if (len === p) {
+        const k = bound(w, len, s[i - p]!, false);
+        w.copyWithin(k, k + 1, len);
+        len--;
+      }
+      const k = bound(w, len, v, true);
+      w.copyWithin(k + 1, k, len);
+      w[k] = v;
+      len++;
+      if (!before && len === p) o[i] = read(w, len, v);
+    }
+    return o;
+  }
+  const pctOf = (w: Float64Array, len: number, q: number) => {
+    const pos = (q / 100) * (len - 1), lo = Math.floor(pos), hi = Math.min(len - 1, lo + 1);
+    return w[lo]! + (w[hi]! - w[lo]!) * (pos - lo);
+  };
+  const median = (src: Src, length: number) => sortedWindow(S(src, 'ta.median'), P(length, 'ta.median'), (w, len) => pctOf(w, len, 50));
+  /** The value at `percent` (0–100) of the last length values, interpolating between the two nearest. */
+  function percentile(src: Src, length: number, percent: number): Series {
+    const q = Number(percent);
+    if (!(q >= 0 && q <= 100)) throw bad({ ko: 'ta.percentile의 percent는 0~100이에요.', en: 'ta.percentile: percent runs from 0 to 100.' });
+    return sortedWindow(S(src, 'ta.percentile'), P(length, 'ta.percentile'), (w, len) => pctOf(w, len, q));
+  }
+  /** The most frequent of the last length values (the smallest on a tie). */
+  const mode = (src: Src, length: number) =>
+    sortedWindow(S(src, 'ta.mode'), P(length, 'ta.mode'), (w, len) => {
+      let best = w[0]!, bestRun = 0;
+      for (let k = 0; k < len; ) {
+        let j = k;
+        while (j < len && w[j] === w[k]) j++;
+        if (j - k > bestRun) (bestRun = j - k), (best = w[k]!);
+        k = j;
+      }
+      return best;
+    });
+  /** % of the previous length values that are at or below this one. */
+  const percentrank = (src: Src, length: number) => {
+    const p = P(length, 'ta.percentrank');
+    return sortedWindow(S(src, 'ta.percentrank'), p, (w, len, v) => (100 * bound(w, len, v, true)) / p, true);
+  };
+  /** Highest − lowest of the last length values. */
+  function range(src: Src, length: number): Series {
+    const hi = extreme(src, length, 'ta.range', true), lo = extreme(src, length, 'ta.range', false);
+    return map((i) => hi[i]! - lo[i]!);
+  }
+  /** Mean absolute deviation from the length-bar average. */
+  function dev(src: Src, length: number): Series {
+    const s = S(src, 'ta.dev'), p = P(length, 'ta.dev'), mean = sma(s, p), o = out();
+    for (let i = p - 1; i < n; i++) {
+      if (Number.isNaN(mean[i]!)) continue;
+      let sum = 0;
+      for (let j = 0; j < p; j++) sum += Math.abs(s[i - j]! - mean[i]!);
+      o[i] = sum / p;
+    }
+    return o;
+  }
+  /** Variance (population, as stdev) of the last length values. */
+  function variance(src: Src, length: number): Series {
+    const sd = stdev(src, P(length, 'ta.variance'));
+    return map((i) => sd[i]! * sd[i]!);
+  }
+  /** Pearson correlation of a and b over the last length bars (−1…1). */
+  function correlation(a: Src, b: Src, length: number): Series {
+    const x = S(a, 'ta.correlation', 'a'), y = S(b, 'ta.correlation', 'b'), p = P(length, 'ta.correlation', 'length', 2), o = out();
+    const mx = sma(x, p), my = sma(y, p);
+    for (let i = p - 1; i < n; i++) {
+      if (Number.isNaN(mx[i]!) || Number.isNaN(my[i]!)) continue;
+      let sxy = 0, sxx = 0, syy = 0;
+      for (let j = 0; j < p; j++) {
+        const dx = x[i - j]! - mx[i]!, dy = y[i - j]! - my[i]!;
+        sxy += dx * dy;
+        sxx += dx * dx;
+        syy += dy * dy;
+      }
+      o[i] = sxx === 0 || syy === 0 ? NAN : sxy / Math.sqrt(sxx * syy);
+    }
+    return o;
+  }
+  /**
+   * Rank correlation index, −100…100: how closely the last length values are ranked like time
+   * (100: each newer value higher). Ties share their average rank.
+   */
+  function rci(src: Src, length = 9): Series {
+    const s = S(src, 'ta.rci'), p = P(length, 'ta.rci', 'length', 2), o = out();
+    const wv = new Float64Array(p), wi = new Int32Array(p);
+    let len = 0;
+    for (let i = 0; i < n; i++) {
+      const v = s[i]!;
+      if (Number.isNaN(v)) {
+        len = 0;
+        continue;
+      }
+      if (len === p) {
+        let k = bound(wv, len, s[i - p]!, false);
+        while (wi[k] !== i - p) k++;
+        wv.copyWithin(k, k + 1, len);
+        wi.copyWithin(k, k + 1, len);
+        len--;
+      }
+      const k = bound(wv, len, v, true);
+      wv.copyWithin(k + 1, k, len);
+      wi.copyWithin(k + 1, k, len);
+      wv[k] = v;
+      wi[k] = i;
+      len++;
+      if (len < p) continue;
+      let d2 = 0;
+      for (let a = 0; a < len; ) {
+        let b = a;
+        while (b < len && wv[b] === wv[a]) b++;
+        // Highest = rank 1: positions a…b−1 (ascending) share the average of ranks len−a … len−b+1.
+        const priceRank = len - (a + b - 1) / 2;
+        for (let k2 = a; k2 < b; k2++) {
+          const timeRank = i - wi[k2]! + 1;
+          d2 += (timeRank - priceRank) ** 2;
+        }
+        a = b;
+      }
+      o[i] = (1 - (6 * d2) / (p * (p * p - 1))) * 100;
+    }
+    return o;
+  }
+
+  // ── volume and money flow ───────────────────────────────────────
+  const cumulative = (f: (i: number) => number) => {
+    const o = out();
+    let sum = 0;
+    for (let i = 0; i < n; i++) {
+      const v = f(i);
+      if (Number.isFinite(v)) sum += v;
+      o[i] = sum;
+    }
+    return o;
+  };
+  const { open: O, high: H, low: L, close: CL, volume: V } = bars;
+  /** Accumulation / distribution: the running total of the close's place in the bar's range × volume. */
+  const accdist = () => cumulative((i) => (H[i] === L[i] ? 0 : ((CL[i]! - L[i]! - (H[i]! - CL[i]!)) / (H[i]! - L[i]!)) * V[i]!));
+  /** Price-volume trend: the running total of the % change × volume. */
+  const pvt = () => cumulative((i) => (i === 0 ? 0 : ((CL[i]! - CL[i - 1]!) / CL[i - 1]!) * V[i]!));
+  /** Negative / positive volume index: moves with the price only on bars where the volume fell / rose. Starts at 1. */
+  function volumeIndex(positive: boolean): Series {
+    const o = out();
+    let x = 1;
+    for (let i = 0; i < n; i++) {
+      if (i > 0 && (positive ? V[i]! > V[i - 1]! : V[i]! < V[i - 1]!) && CL[i - 1]! !== 0) x += ((CL[i]! - CL[i - 1]!) / CL[i - 1]!) * x;
+      o[i] = x;
+    }
+    return o;
+  }
+  /** Williams accumulation / distribution. */
+  const wad = () =>
+    cumulative((i) => {
+      if (i === 0) return 0;
+      const pc = CL[i - 1]!, c = CL[i]!;
+      return c > pc ? c - Math.min(L[i]!, pc) : c < pc ? c - Math.max(H[i]!, pc) : 0;
+    });
+  /** Williams variable accumulation / distribution, per bar: (close − open) / (high − low) × volume. */
+  const wvad = () => map((i) => (H[i] === L[i] ? 0 : ((CL[i]! - O[i]!) / (H[i]! - L[i]!)) * V[i]!));
+  /** Intraday intensity index, per bar: (2·close − high − low) / ((high − low) × volume). */
+  const iii = () => map((i) => (H[i] === L[i] || !V[i] ? 0 : (2 * CL[i]! - H[i]! - L[i]!) / ((H[i]! - L[i]!) * V[i]!)));
+  /** The highest / lowest value so far (all bars up to this one). */
+  function allTime(src: Src, fn: string, higher: boolean): Series {
+    const s = S(src, fn), o = out();
+    let best = NAN;
+    for (let i = 0; i < n; i++) {
+      const v = s[i]!;
+      if (!Number.isNaN(v) && (Number.isNaN(best) || (higher ? v > best : v < best))) best = v;
+      o[i] = best;
+    }
+    return o;
+  }
+
+  // ── levels ──────────────────────────────────────────────────────
+  const PIVOT_TYPES = ['traditional', 'fibonacci', 'woodie', 'classic', 'camarilla'] as const;
+  /**
+   * Pivot point levels from the previous period's high, low and close (Woodie: this period's open
+   * too), the same all through the current period; NaN in the first one.
+   */
+  function pivots(type: string = 'traditional', anchor: unknown = 'D'): Record<'p' | 'r1' | 'r2' | 'r3' | 's1' | 's2' | 's3', Series> {
+    if (!(PIVOT_TYPES as readonly string[]).includes(type))
+      throw bad({ ko: `ta.pivots의 type은 ${PIVOT_TYPES.join(', ')} 중 하나예요.`, en: `ta.pivots: type is one of ${PIVOT_TYPES.join(', ')}.` });
+    const starts = startsOf(anchor, 'ta.pivots');
+    const keys = ['p', 'r1', 'r2', 'r3', 's1', 's2', 's3'] as const;
+    const res = Object.fromEntries(keys.map((k) => [k, out()])) as Record<(typeof keys)[number], Series>;
+    let ph = NAN, pl = NAN, pc = NAN, h = NAN, l = NAN, lv: number[] | null = null;
+    for (let i = 0; i < n; i++) {
+      if (starts[i] && i > 0) {
+        ph = h;
+        pl = l;
+        pc = CL[i - 1]!;
+        h = l = NAN;
+        const r = ph - pl;
+        let P_ = (ph + pl + pc) / 3;
+        if (type === 'woodie') P_ = (ph + pl + 2 * O[i]!) / 4;
+        if (type === 'fibonacci') lv = [P_, P_ + 0.382 * r, P_ + 0.618 * r, P_ + r, P_ - 0.382 * r, P_ - 0.618 * r, P_ - r];
+        else if (type === 'camarilla') lv = [P_, pc + (1.1 * r) / 12, pc + (1.1 * r) / 6, pc + (1.1 * r) / 4, pc - (1.1 * r) / 12, pc - (1.1 * r) / 6, pc - (1.1 * r) / 4];
+        else if (type === 'woodie') lv = [P_, 2 * P_ - pl, P_ + r, ph + 2 * (P_ - pl), 2 * P_ - ph, P_ - r, pl - 2 * (ph - P_)];
+        else if (type === 'classic') lv = [P_, 2 * P_ - pl, P_ + r, P_ + 2 * r, 2 * P_ - ph, P_ - r, P_ - 2 * r];
+        else lv = [P_, 2 * P_ - pl, P_ + r, 2 * P_ + (ph - 2 * pl), 2 * P_ - ph, P_ - r, 2 * P_ - (2 * ph - pl)];
+      }
+      h = Number.isNaN(h) ? H[i]! : Math.max(h, H[i]!);
+      l = Number.isNaN(l) ? L[i]! : Math.min(l, L[i]!);
+      if (lv) keys.forEach((k, j) => (res[k][i] = lv![j]!));
+    }
+    return res;
+  }
+  /**
+   * Ichimoku lines, not shifted: plot spanA / spanB with offset: base − 1 (25 by default) and the
+   * lagging line as close with offset: −(base − 1).
+   */
+  function ichimoku(conversion = 9, base = 26, spanB = 52): { conversion: Series; base: Series; spanA: Series; spanB: Series } {
+    const mid = (p: number, arg: string) => {
+      const q = P(p, 'ta.ichimoku', arg), hh = highest(H as Series, q), ll = lowest(L as Series, q);
+      return map((i) => (hh[i]! + ll[i]!) / 2);
+    };
+    const c = mid(conversion, 'conversion'), b = mid(base, 'base');
+    return { conversion: c, base: b, spanA: map((i) => (c[i]! + b[i]!) / 2), spanB: mid(spanB, 'spanB') };
+  }
+
   // ── series helpers ──────────────────────────────────────────────
   /** A Series built bar by bar, oldest first (outer variables carry state from bar to bar). */
   function map(fn: (i: number) => unknown): Series {
@@ -438,11 +875,12 @@ export function createLib(bars: Bars) {
   }
 
   const ta = {
-    sma, ema, rma, wma, vwma, hma, dema, tema, linreg, alma,
-    highest, lowest, change, roc, mom: change, cum, stdev,
-    rsi, stoch, macd, cci, mfi,
-    atr, tr: () => trueRange(false), bb, dmi, adx: (length = 14, smoothing = 14) => dmi(length, smoothing).adx, supertrend,
-    obv,
+    sma, ema, rma, wma, vwma, hma, dema, tema, linreg, alma, swma, vwap, vwapbands,
+    highest, lowest, highestbars, lowestbars, max: (src: Src) => allTime(src, 'ta.max', true), min: (src: Src) => allTime(src, 'ta.min', false),
+    change, roc, mom: change, cum, stdev, variance, dev, range, median, mode, percentile, percentrank, correlation,
+    rsi, stoch, macd, cci, mfi, wpr, cmo, tsi, cog, rci,
+    atr, tr: () => trueRange(false), bb, bbw, kc, kcw, dmi, adx: (length = 14, smoothing = 14) => dmi(length, smoothing).adx, supertrend, sar, ichimoku, pivots,
+    obv, accdist, pvt, nvi: () => volumeIndex(false), pvi: () => volumeIndex(true), wad, wvad, iii,
     crossover, crossunder, cross, rising, falling, pivothigh, pivotlow, barssince, valuewhen,
   };
 
@@ -496,5 +934,5 @@ export function createLib(bars: Bars) {
     map,
   };
 
-  return { ta, calc, n };
+  return { ta, calc, n, clock: { offsetsIn, startsOf, zone: defaultZone } };
 }

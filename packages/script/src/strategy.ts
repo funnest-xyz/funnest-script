@@ -15,11 +15,28 @@ export interface Sided {
 export type Levels = Level | Sided;
 
 /** The level that applies to a position this way (1 long, −1 short). */
-export function levelFor(l: Levels | null, dir: 1 | -1): Level | null {
+export function levelFor(l: Levels | null | undefined, dir: 1 | -1): Level | null {
   if (!l) return null;
   if ('percent' in l || 'price' in l) return l;
   return dir > 0 ? l.long : l.short;
 }
+
+/** A partial target: close `part` (0–1] of the position as it was at its largest, at `level`; `part` 1 on the last one = the rest. */
+export interface Step {
+  level: Level;
+  part: number;
+}
+/** Targets in order, for both sides or { long, short } each its own. */
+export type Steps = Step[] | { long: Step[] | null; short: Step[] | null };
+
+export function stepsFor(s: Steps | null | undefined, dir: 1 | -1): Step[] | null {
+  if (!s) return null;
+  if (Array.isArray(s)) return s;
+  return dir > 0 ? s.long : s.short;
+}
+
+/** Most of each a strategy may ask for. */
+export const STRATEGY_LIMITS = { steps: 5, pyramiding: 20, leverage: 100, exitAfter: 5000, entryBars: 500 } as const;
 
 export interface Strategy {
   longEntry: Uint8Array | null;
@@ -39,6 +56,25 @@ export interface Strategy {
   slippage: number | null;
   /** An entry the other way closes the position and opens the new one. */
   reverse: boolean;
+  // Later additions: optional, so strategies made before (or by hand) still work.
+  /** Partial targets (takeProfit: [{ at, close }]); `take` is null when these are set. */
+  steps?: Steps | null;
+  /** From the bar after the first target fills, the stop is at the entry price. */
+  breakEven?: boolean;
+  /** Close at the open this many bars after the first entry. */
+  exitAfter?: number | null;
+  /** Enter at this price (the signal bar's value) instead of the next open: a limit order below the signal bar's close for a long (above for a short), a stop order on the other side. */
+  entryPrice?: Levels | null;
+  /** Bars an entry order waits before it's dropped (1: the next bar only). */
+  entryBars?: number;
+  /** Most entries one way at a time (1: no adding). */
+  pyramiding?: number;
+  /** Futures leverage (1: none); a position is liquidated when its margin is gone. */
+  leverage?: number;
+  /** Money per entry (in capital's units; the paper account's currency when auto-trading) instead of `size`. */
+  amount?: number | null;
+  /** Quantity per entry (coins, shares) instead of `size`. */
+  qty?: number | null;
 }
 
 /** The old shape: one direction. */
@@ -87,7 +123,8 @@ export function entryCount(s: Strategy | LegacySignals): number {
 export function strategyBuffers(s: Strategy): ArrayBuffer[] {
   const out: ArrayBuffer[] = [];
   for (const a of [s.longEntry, s.longExit, s.shortEntry, s.shortExit]) if (a) out.push(a.buffer as ArrayBuffer);
-  for (const ls of [s.stop, s.take]) for (const l of ls && !('percent' in ls) && !('price' in ls) ? [ls.long, ls.short] : [ls]) if (l && 'price' in l) out.push(l.price.buffer as ArrayBuffer);
+  for (const ls of [s.stop, s.take, s.entryPrice ?? null]) for (const l of ls && !('percent' in ls) && !('price' in ls) ? [ls.long, ls.short] : [ls]) if (l && 'price' in l) out.push(l.price.buffer as ArrayBuffer);
+  for (const dir of [1, -1] as const) for (const step of stepsFor(s.steps, dir) ?? []) if ('price' in step.level) out.push(step.level.price.buffer as ArrayBuffer);
   // The same series on both sides is one buffer: hand it over once.
   return [...new Set(out)];
 }

@@ -2,7 +2,7 @@ import { deflateRawSync } from 'node:zlib';
 import { type Bars, EXAMPLES, GROUPS, type InputValues, isV2, LLMS_TEXT, type Locale, type RunResult, type SpecItem } from '@funnest/script';
 import { fetchBars, type FetchedBars, type Resolution, isResolution } from './bars';
 import { fulfil } from './data';
-import { runIsolated } from './isolate';
+import { runIsolated, type RunWhere } from './isolate';
 import { backtestSummary, summarize, type BacktestSummary, type Failure, type RunSummary } from './summary';
 import { typeCheck, type TypeProblem } from './typecheck';
 
@@ -58,12 +58,23 @@ export interface RunOptions {
  * Runs on fetched bars in two passes when the script asks for more data (request.bars /
  * request.data): the first finds out what, it's fetched, the second runs with it.
  */
+/** What a script is told about fetched bars: crypto venues only, so days start at 00:00 UTC; the last bar is still forming. */
+export function whereOf(bars: FetchedBars): RunWhere {
+  const at = bars.symbol.indexOf(':');
+  const venue = bars.symbol.slice(0, at), code = bars.symbol.slice(at + 1);
+  const perp = venue === 'BINANCEF' || venue === 'BYBIT' || (venue === 'OKX' && /SWAP$/.test(code));
+  const quote = /^(KRW|USDT|BTC)-/.exec(code)?.[1] ?? /(USDT|USDC|USD)(-SWAP)?$/.exec(code)?.[1] ?? '';
+  const base = code.replace(/-SWAP$/, '').replace(new RegExp(`^${quote}-|-?${quote}$`), '');
+  return { symbol: { symbol: bars.symbol, market: perp ? 'perp' : 'spot', currency: quote, base, timezone: 'UTC' }, timeframe: bars.resolution, confirmed: false };
+}
+
 async function runWithRequests(code: string, bars: FetchedBars, o: RunOptions): Promise<{ result: RunResult; unavailable: string[] }> {
-  const first = runIsolated(code, bars, o.inputs, o.locale);
+  const where = whereOf(bars);
+  const first = runIsolated(code, bars, o.inputs, o.locale, undefined, undefined, where);
   const missing = first.requests.filter((r) => r.missing);
   if (!missing.length) return { result: first, unavailable: [] };
   const { data, unavailable } = await fulfil(missing, { symbol: bars.symbol, resolution: bars.resolution, bars });
-  return { result: runIsolated(code, bars, o.inputs, o.locale, undefined, data), unavailable };
+  return { result: runIsolated(code, bars, o.inputs, o.locale, undefined, data, where), unavailable };
 }
 
 /**

@@ -1,4 +1,4 @@
-import { createLib } from './lib';
+import { createLib, type LibContext } from './lib';
 import { isSeries, Series, type ScriptError } from './series';
 
 /**
@@ -59,7 +59,9 @@ export interface RequestSpec {
   missing: boolean;
 }
 
-const SYMBOL = /^[A-Z][A-Z0-9_]*:[A-Za-z0-9._\-/]+$/;
+/** A market as scripts name one: 'BINANCEF:BTCUSDT', 'UPBIT:KRW-BTC', 'KRX:005930'. */
+export const SYMBOL_PATTERN = /^[A-Z][A-Z0-9_]{0,19}:[A-Za-z0-9._\-/]{1,40}$/;
+const SYMBOL = SYMBOL_PATTERN;
 export const barsKey = (symbol: string | null, tf: RequestTimeframe | null) => `bars|${symbol ?? ''}|${tf ?? ''}`;
 export const dataKey = (name: DataName, symbol: string | null) => `data|${name}|${symbol ?? ''}`;
 
@@ -101,7 +103,7 @@ export type RequestedLib = ReturnType<typeof createLib>['calc'] & { ta: ReturnTy
 
 type Err = (code: 'BAD_ARG' | 'LIMIT', ko: string, en: string, hintKo?: string, hintEn?: string) => ScriptError;
 
-export function createRequests(n: number, time: ArrayLike<number>, given: RequestData | undefined, err: Err, spacing?: number) {
+export function createRequests(n: number, time: ArrayLike<number>, given: RequestData | undefined, err: Err, spacing?: number, libContext: LibContext = {}) {
   const specs: RequestSpec[] = [];
   const chartSpacing = spacing ?? spacingOf(time);
   const nan = () => new Series(n).fill(Number.NaN);
@@ -134,7 +136,7 @@ export function createRequests(n: number, time: ArrayLike<number>, given: Reques
       if (typeof fn !== 'function')
         throw err('BAD_ARG', 'compute에는 함수가 필요해요. 예: d.compute((b) => b.ta.ema(b.close, 20))', 'compute needs a function, e.g. d.compute((b) => b.ta.ema(b.close, 20)).');
       if (!src) return nan();
-      const lib = createLib({ open: src.open, high: src.high, low: src.low, close: src.close, volume: src.volume, time: src.time });
+      const lib = createLib({ open: src.open, high: src.high, low: src.low, close: src.close, volume: src.volume, time: src.time }, libContext);
       const own = (a: Float64Array) => Series.from(a) as Series;
       const b: RequestedLib = { ...lib.calc, ta: lib.ta, open: own(src.open), high: own(src.high), low: own(src.low), close: own(src.close), volume: own(src.volume), time: own(src.time), bar: { count: lib.n } };
       const result = (fn as (b: RequestedLib) => unknown)(b);

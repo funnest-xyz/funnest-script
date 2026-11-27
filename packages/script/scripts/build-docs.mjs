@@ -61,7 +61,7 @@ function dts() {
   for (const g of GROUPS)
     for (const item of g.items) {
       const dot = item.name.indexOf('.');
-      if (dot > 0 && item.name !== 'bar.count') {
+      if (dot > 0) {
         const ns = item.name.slice(0, dot);
         if (!nested.has(ns)) nested.set(ns, []);
         nested.get(ns).push(`  /** ${item.en} */\n  ${item.ts};`);

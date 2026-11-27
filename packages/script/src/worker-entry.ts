@@ -8,6 +8,9 @@
  * `__funnestLoad` before removing it from the global; it's taken here and removed too, so scripts
  * never see it. Elsewhere (Node, tests) there is none and `new Function` is used.
  */
+// First: the memory guard has to be in place before the runtime's classes extend typed arrays.
+import { GUARDED } from './guard-install';
+import { hardenClock } from './guard';
 import { execute, isV2, transferables, type Compile, type RunOptions } from './runtime';
 import type { Bars } from './lib';
 
@@ -39,8 +42,12 @@ const compileAsScript: Compile | undefined =
       }
     : undefined;
 
-g.__funnestScript = {
-  execute: (code: string, bars: Bars, inputs?: Record<string, number>, options: RunOptions = {}) => execute(code, bars, inputs, { ...options, compile: compileAsScript }),
+g.__funnestScript = GUARDED && {
+  execute: (code: string, bars: Bars, inputs?: Record<string, number>, options: RunOptions = {}) => {
+    // v2 scripts get no clock or dice from the realm either (v1 scripts, in the same worker, never promised that).
+    hardenClock();
+    return execute(code, bars, inputs, { ...options, compile: compileAsScript });
+  },
   isV2,
   transferables,
 };

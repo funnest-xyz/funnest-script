@@ -18,6 +18,8 @@ type Position = 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middl
 type Shape = 'triangleup' | 'triangledown' | 'arrowup' | 'arrowdown' | 'circle' | 'square' | 'diamond' | 'cross' | 'xcross' | 'flag';
 /** Where a mark sits: over the bar's high, under its low, at a given price, or at the pane's top / bottom edge. */
 type Place = 'above' | 'below' | 'price' | 'top' | 'bottom';
+/** A period in the market's time zone: a day, a week (from Monday), a month, a year. */
+type Period = 'D' | 'W' | 'M' | 'Y';
 /** A bar length: minutes, or 1D / 1W / 1M. */
 type Timeframe = '1' | '3' | '5' | '15' | '30' | '60' | '120' | '240' | '1D' | '1W' | '1M';
 /** What compute's function gets: the requested bars (open, high, low, close, volume, time, bar.count) and ta / calc working on them. */
@@ -25,6 +27,8 @@ type RequestedBars = { open: Series; high: Series; low: Series; close: Series; v
 type DataName = 'funding' | 'openInterest' | 'longShortRatio' | 'topLongShortRatio' | 'kimchiPremium' | 'cvd' | 'fearGreed' | 'coinbasePremium' | 'dvol' | 'stablecoins';
 /** Where an input is shown: a section (group), a shared row (inline), a note (tooltip). */
 type InputOptions = { group?: string; inline?: string; tooltip?: string };
+/** A partial target: at a % from the entry (or a price series), close this % of the position (left out on the last one: the rest). */
+type Target = { at: number | Series; close?: number };
 
 /** Name and place: overlay true draws on the candles, false in its own pane. Call once, first. range fixes the pane’s scale. timeframe is the interval the script is tuned for ('60' = 1 hour): apps pick it first and run the standard backtest on it. Other intervals still run, but trade more or less often and differently. */
 declare function indicator(o: { name: string; overlay: boolean; precision?: number; range?: [number, number]; timeframe?: string }): void;
@@ -62,8 +66,14 @@ declare const hlcc4: Series;
 /** Value traded per bar (where the exchange gives it, else NaN) */
 declare const turnover: Series;
 
-/** Number of bars */
-declare const bar: { count: number };
+/** The bars: count, index (0, 1, 2… as a series), last (the latest index), confirmed (the latest bar has closed; false while it is forming) */
+declare const bar: { count: number; index: Series; last: number; confirmed: boolean };
+
+/** The market: symbol 'BINANCEF:BTCUSDT', ticker 'BTCUSDT', exchange 'BINANCEF', market (spot, perp, stock…), currency 'USDT' / 'KRW', tick (the price step at the latest price; NaN when unknown), timezone (the market's: 'UTC' for crypto, 'Asia/Seoul' for Korean stocks). Unknown text is '' */
+declare const syminfo: { symbol: string; ticker: string; exchange: string; name: string; market: 'spot' | 'perp' | 'stock' | 'index' | 'other' | 'unknown'; currency: string; base: string; tick: number; timezone: string };
+
+/** The chart's interval: period ('60', '1D', '1W'…), minutes per bar, isIntraday (shorter than a day)… */
+declare const timeframe: { period: string; minutes: number; seconds: number; isIntraday: boolean; isDaily: boolean; isWeekly: boolean; isMonthly: boolean };
 
 /** a + b per bar */
 declare function add(a: Source, b: Source): Series;
@@ -161,8 +171,8 @@ declare function table(o: { position?: Position; rows: (string | number | null |
 /** Colors; color.up / color.down follow the viewer’s rising / falling colors. '#RRGGBB' and '#RRGGBBAA' work too. color.alpha(c, 0.2) sets opacity 0 (invisible)–1; color.new(c, 80) is Pine’s transparency 0–100 */
 declare const color: { up: Color; down: Color; red: Color; blue: Color; green: Color; orange: Color; yellow: Color; purple: Color; pink: Color; teal: Color; gray: Color; white: Color; black: Color; alpha(c: Color, opacity: number): Color; "new"(c: Color, transparency?: number): Color; rgb(r: number, g: number, b: number, opacity?: number): Color };
 
-/** The backtest strategy (once). Signals fill at the next bar’s open. long / short: entry conditions; longExit / shortExit: exits (without them, only stops, targets and the other side’s entry close). stopLoss / takeProfit: % from the entry (a number) or a price per bar (a series; the bar before’s value is used). For a different level per side give { long, short } (one price series in a two-way strategy would sit on the same line for shorts too); a side left out has none. trailingStop: % back from the best price. A bar touching both stop and target takes the stop. size: % of the account per trade (default 100). capital: starting money (default 10000). fee / slippage: % per fill (default: the viewer’s settings). reverse: an entry the other way turns the position (default true). The old { entry, exit, side } still works */
-declare function strategy(o: { long?: Bool; longExit?: Bool; short?: Bool; shortExit?: Bool; stopLoss?: number | Series | { long?: number | Series; short?: number | Series }; takeProfit?: number | Series | { long?: number | Series; short?: number | Series }; trailingStop?: number; size?: number; capital?: number; fee?: number; slippage?: number; reverse?: boolean }): void;
+/** The backtest strategy (once). Signals fill at the next bar’s open. long / short: entry conditions; longExit / shortExit: exits (without them, only stops, targets and the other side’s entry close). stopLoss / takeProfit: % from the entry (a number) or a price per bar (a series; the bar before’s value is used); per side with { long, short } (a side left out has none). A list as takeProfit takes profit in parts: [{ at: 2, close: 50 }, { at: 5 }] is half at +2%, the rest at +5% (close is a % of the position; left out on the last one: the rest). breakEven: true moves the stop to the entry price from the bar after the first target. trailingStop: % back from the best price. exitAfter: close at the open N bars after the entry. entryPrice: an order at this price of the signal bar (for a long, below the close a limit, above it a breakout stop), waiting entryBars bars (default 1). pyramiding: most entries one way (default 1; one position at the average price; keep size under 100). leverage: futures leverage (default 1; liquidated when the margin is gone; fees on the leveraged value). size: % of the account per entry (default 100), or amount (money per entry, in capital’s units) or qty (quantity per entry). capital: starting money (default 10000). fee / slippage: % per fill (default: the viewer’s settings). A bar touching both stop and target takes the stop. reverse: an entry the other way turns the position (default true). The old { entry, exit, side } still works */
+declare function strategy(o: { long?: Bool; longExit?: Bool; short?: Bool; shortExit?: Bool; stopLoss?: number | Series | { long?: number | Series; short?: number | Series }; takeProfit?: number | Series | Target[] | { long?: number | Series | Target[]; short?: number | Series | Target[] }; trailingStop?: number; breakEven?: boolean; exitAfter?: number; entryPrice?: Series | { long?: Series; short?: Series }; entryBars?: number; pyramiding?: number; leverage?: number; size?: number; amount?: number; qty?: number; capital?: number; fee?: number; slippage?: number; reverse?: boolean }): void;
 
 /** An alert (up to 10). Rings when the condition is true on a bar that just closed (a forming bar is judged when it closes), for the market and timeframe the user turned 'Get alerts' on for, while the terminal is open. message may hold {name} {symbol} {close} {time} */
 declare function alert(when: Bool, message?: string): void;
@@ -180,6 +190,25 @@ declare const request: {
   data(name: DataName, o?: { symbol?: string }): Series;
 };
 
+declare const date: {
+  /** The hour (0–23) each bar opens at, in the market's zone (syminfo.timezone) unless one is given, e.g. date.hour('Asia/Seoul') */
+  hour(tz?: string): Series;
+  /** The minute (0–59) each bar opens at */
+  minute(tz?: string): Series;
+  /** Weekday: 0 Sunday … 6 Saturday (as in JavaScript, not Pine) */
+  dayofweek(tz?: string): Series;
+  /** Day of the month (1–31) */
+  day(tz?: string): Series;
+  /** Month (1–12) */
+  month(tz?: string): Series;
+  /** Year */
+  year(tz?: string): Series;
+  /** True on the first bar of each day ('D', default), week ('W', from Monday), month ('M') or year ('Y') */
+  isNew(period?: Period, tz?: string): Cond;
+  /** True on bars opening inside 'HHMM-HHMM' (an earlier end runs past midnight: '2200-0200') */
+  session(spec: string, tz?: string): Cond;
+};
+
 declare const input: {
   /** A whole number the user can change (a period…) */
   int(label: string, def: number, o?: { min?: number; max?: number } & InputOptions): number;
@@ -195,6 +224,12 @@ declare const input: {
   text(label: string, def?: string, o?: InputOptions): string;
   /** A color the user picks */
   color(label: string, def: Color, o?: InputOptions): Color;
+  /** An interval the user picks (for request.bars); default '1D' */
+  timeframe(label: string, def?: Timeframe, o?: InputOptions): Timeframe;
+  /** A market the user picks ('BINANCEF:ETHUSDT', exchange:symbol), for request.bars / request.data */
+  symbol(label: string, def: string, o?: InputOptions): string;
+  /** A moment the user picks (UTC ms); the default is a number or a date like '2026-01-01T00:00:00Z'. For an anchored VWAP's start, … */
+  time(label: string, def: number | string, o?: InputOptions): number;
 };
 
 declare const ta: {
@@ -218,6 +253,12 @@ declare const ta: {
   linreg(src: Source, length: number, offset?: number): Series;
   /** Arnaud Legoux moving average (default offset 0.85, sigma 6) */
   alma(src: Source, length: number, offset?: number, sigma?: number): Series;
+  /** Symmetrically weighted average of the last 4 values (1/6, 2/6, 2/6, 1/6) */
+  swma(src: Source): Series;
+  /** Volume-weighted average price, starting over at each anchor: 'D' (day, default), 'W', 'M', 'Y' in the market's time zone (crypto UTC, Korean stocks Seoul), or a condition (from the bars where it is true). src defaults to hlc3 */
+  vwap(src?: Source, anchor?: Period | Bool): Series;
+  /** VWAP with bands at ± mult × the volume-weighted standard deviation (default 1) */
+  vwapbands(src?: Source, anchor?: Period | Bool, mult?: number): { vwap: Series; upper: Series; lower: Series };
   /** Relative strength index (0–100, default 14) */
   rsi(src: Source, length?: number): Series;
   /** Stochastic %K and %D (default 14, 3, 3) */
@@ -232,6 +273,16 @@ declare const ta: {
   roc(src: Source, length: number): Series;
   /** Momentum: change vs length bars ago */
   mom(src: Source, length?: number): Series;
+  /** Williams %R (−100 to 0, default 14) */
+  wpr(length?: number): Series;
+  /** Chande momentum oscillator (−100 to 100, default 9) */
+  cmo(src: Source, length?: number): Series;
+  /** True strength index, −1 to 1 as in Pine (× 100 for the usual display); default 13, 25 */
+  tsi(src: Source, short?: number, long?: number): Series;
+  /** Center of gravity (default 10) */
+  cog(src: Source, length?: number): Series;
+  /** Rank correlation index (−100 to 100, default 9); 100 = each value higher than the one before */
+  rci(src: Source, length?: number): Series;
   /** Average true range (default 14) */
   atr(length?: number): Series;
   /** True range */
@@ -240,6 +291,18 @@ declare const ta: {
   bb(src: Source, length?: number, mult?: number): { upper: Series; mid: Series; lower: Series; width: Series };
   /** Standard deviation */
   stdev(src: Source, length: number): Series;
+  /** Bollinger band width: (upper − lower) / mid */
+  bbw(src: Source, length?: number, mult?: number): Series;
+  /** Keltner channels: EMA ± mult × the EMA of the true range (default 20, 2); useTrueRange false uses high − low */
+  kc(src: Source, length?: number, mult?: number, useTrueRange?: boolean): { upper: Series; mid: Series; lower: Series };
+  /** Keltner channel width: (upper − lower) / mid */
+  kcw(src: Source, length?: number, mult?: number, useTrueRange?: boolean): Series;
+  /** Parabolic SAR (default 0.02, 0.02, 0.2); below the price = uptrend */
+  sar(start?: number, inc?: number, max?: number): Series;
+  /** Ichimoku conversion, base, span A and B (default 9, 26, 52), not shifted: plot the spans with offset: 25 (base − 1) and the lagging line as close with offset: -25 */
+  ichimoku(conversion?: number, base?: number, spanB?: number): { conversion: Series; base: Series; spanA: Series; spanB: Series };
+  /** Pivot points from the previous period's (anchor, default 'D') high, low and close, the same all through the current period; NaN in the first one */
+  pivots(type?: 'traditional' | 'fibonacci' | 'woodie' | 'classic' | 'camarilla', anchor?: Period | Bool): { p: Series; r1: Series; r2: Series; r3: Series; s1: Series; s2: Series; s3: Series };
   /** Directional movement: +DI, −DI and ADX */
   dmi(length?: number, adxSmoothing?: number): { plus: Series; minus: Series; adx: Series };
   /** ADX (trend strength) */
@@ -250,12 +313,50 @@ declare const ta: {
   highest(src: Source, length: number): Series;
   /** Lowest value of the last length bars */
   lowest(src: Source, length: number): Series;
+  /** How many bars back the highest of the last length values is (0 = this bar, the latest on a tie); positive, unlike Pine */
+  highestbars(src: Source, length: number): Series;
+  /** How many bars back the lowest of the last length values is (positive) */
+  lowestbars(src: Source, length: number): Series;
+  /** Highest value so far (all bars up to this one) */
+  max(src: Source): Series;
+  /** Lowest value so far */
+  min(src: Source): Series;
   /** Change vs length bars ago (default 1) */
   change(src: Source, length?: number): Series;
   /** Running total (NaN counts as 0) */
   cum(src: Source): Series;
   /** On-balance volume */
   obv(): Series;
+  /** Accumulation / distribution */
+  accdist(): Series;
+  /** Price-volume trend */
+  pvt(): Series;
+  /** Negative volume index (moves only on bars where volume fell; starts at 1) */
+  nvi(): Series;
+  /** Positive volume index (moves only on bars where volume rose; starts at 1) */
+  pvi(): Series;
+  /** Williams accumulation / distribution */
+  wad(): Series;
+  /** Williams variable accumulation / distribution (per bar) */
+  wvad(): Series;
+  /** Intraday intensity index (per bar) */
+  iii(): Series;
+  /** Median of the last length values */
+  median(src: Source, length: number): Series;
+  /** Most frequent of the last length values (the smallest on a tie) */
+  mode(src: Source, length: number): Series;
+  /** The value at percent (0–100) of the last length values, interpolated */
+  percentile(src: Source, length: number, percent: number): Series;
+  /** % of the previous length values at or below this one */
+  percentrank(src: Source, length: number): Series;
+  /** Highest − lowest of the last length values */
+  range(src: Source, length: number): Series;
+  /** Mean absolute deviation */
+  dev(src: Source, length: number): Series;
+  /** Variance (stdev squared) */
+  variance(src: Source, length: number): Series;
+  /** Correlation of a and b over the last length bars (−1 to 1) */
+  correlation(a: Source, b: Source, length: number): Series;
   /** True on the bar where a crosses above b */
   crossover(a: Source, b: Source): Cond;
   /** True on the bar where a crosses below b */

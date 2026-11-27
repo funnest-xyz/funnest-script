@@ -28,7 +28,8 @@ const program = `(() => {
     return o;
   };
   const b = revive(j.bars);
-  const r = __funnestScript.execute(j.code, b, j.inputs, { locale: j.locale, requests: j.requests ? revive(j.requests) : undefined });
+  const w = j.where || {};
+  const r = __funnestScript.execute(j.code, b, j.inputs, { locale: j.locale, requests: j.requests ? revive(j.requests) : undefined, symbol: w.symbol, timeframe: w.timeframe, confirmed: w.confirmed === true });
   const tag = (x) => (Number.isFinite(x) ? x : x !== x ? 'NaN' : x > 0 ? 'Inf' : '-Inf');
   return JSON.stringify(r, (k, v) =>
     v instanceof Float64Array ? { __f64: Array.from(v, tag) } : v instanceof Uint8Array ? { __u8: Array.from(v) } : typeof v === 'number' && !Number.isFinite(v) ? { __num: tag(v) } : v,

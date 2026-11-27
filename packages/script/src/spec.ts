@@ -77,7 +77,6 @@ export const GROUPS: SpecGroup[] = [
       { name: 'ohlc4', ts: `const ohlc4: ${S}`, ko: '(시가 + 고가 + 저가 + 종가) / 4', en: '(open + high + low + close) / 4' },
       { name: 'hlcc4', ts: `const hlcc4: ${S}`, ko: '(고가 + 저가 + 종가 × 2) / 4', en: '(high + low + 2 × close) / 4' },
       { name: 'turnover', ts: `const turnover: ${S}`, ko: '거래대금 (주는 거래소만, 없으면 NaN)', en: 'Value traded per bar (where the exchange gives it, else NaN)' },
-      { name: 'bar.count', ts: 'const bar: { count: number }', ko: '봉 수', en: 'Number of bars' },
       {
         name: 'request.bars',
         ts: `bars(o: { symbol?: string; timeframe?: Timeframe }): { open: ${S}; high: ${S}; low: ${S}; close: ${S}; volume: ${S}; time: ${S}; compute<T extends ${S} | Record<string, ${S}>>(fn: (b: RequestedBars) => T): T }`,
@@ -95,6 +94,24 @@ export const GROUPS: SpecGroup[] = [
     ],
   },
   {
+    id: 'market',
+    ko: '종목 · 주기 · 시간',
+    en: 'Market · interval · time',
+    items: [
+      { name: 'bar', ts: `const bar: { count: number; index: ${S}; last: number; confirmed: boolean }`, ko: '봉 정보. count 봉 수, index 봉 번호(0부터, 시리즈), last 마지막 봉 번호, confirmed 마지막 봉이 끝났는지(진행 중이면 false)', en: 'The bars: count, index (0, 1, 2… as a series), last (the latest index), confirmed (the latest bar has closed; false while it is forming)', example: 'map((i) => (i === bar.last && !bar.confirmed ? NaN : close[i]))' },
+      { name: 'syminfo', ts: "const syminfo: { symbol: string; ticker: string; exchange: string; name: string; market: 'spot' | 'perp' | 'stock' | 'index' | 'other' | 'unknown'; currency: string; base: string; tick: number; timezone: string }", ko: "종목 정보. symbol 'BINANCEF:BTCUSDT', ticker 'BTCUSDT', exchange 'BINANCEF', market 현물·선물(perp)·주식, currency 'USDT'·'KRW', tick 지금 가격의 호가 단위(모르면 NaN), timezone 거래소 시간대(코인 'UTC', 국내주식 'Asia/Seoul'). 모르면 빈 글자", en: "The market: symbol 'BINANCEF:BTCUSDT', ticker 'BTCUSDT', exchange 'BINANCEF', market (spot, perp, stock…), currency 'USDT' / 'KRW', tick (the price step at the latest price; NaN when unknown), timezone (the market's: 'UTC' for crypto, 'Asia/Seoul' for Korean stocks). Unknown text is ''", example: "const step = Number.isNaN(syminfo.tick) ? 0.01 : syminfo.tick" },
+      { name: 'timeframe', ts: 'const timeframe: { period: string; minutes: number; seconds: number; isIntraday: boolean; isDaily: boolean; isWeekly: boolean; isMonthly: boolean }', ko: "차트 주기. period '60'·'1D'·'1W', minutes 한 봉의 분, isIntraday 일봉보다 짧은지", en: "The chart's interval: period ('60', '1D', '1W'…), minutes per bar, isIntraday (shorter than a day)…", example: 'const len = timeframe.isIntraday ? 50 : 20' },
+      { name: 'date.hour', ts: `hour(tz?: string): ${S}`, ko: '봉 시작의 시 (0~23). 시간대 기본은 거래소 시간대(syminfo.timezone), 한국 시간은 date.hour(\'Asia/Seoul\')', en: "The hour (0–23) each bar opens at, in the market's zone (syminfo.timezone) unless one is given, e.g. date.hour('Asia/Seoul')", example: "date.hour('Asia/Seoul')" },
+      { name: 'date.minute', ts: `minute(tz?: string): ${S}`, ko: '봉 시작의 분 (0~59)', en: 'The minute (0–59) each bar opens at' },
+      { name: 'date.dayofweek', ts: `dayofweek(tz?: string): ${S}`, ko: '요일: 0 일요일 ~ 6 토요일 (자바스크립트와 같음, 파인과 다름)', en: 'Weekday: 0 Sunday … 6 Saturday (as in JavaScript, not Pine)' },
+      { name: 'date.day', ts: `day(tz?: string): ${S}`, ko: '날짜 (1~31)', en: 'Day of the month (1–31)' },
+      { name: 'date.month', ts: `month(tz?: string): ${S}`, ko: '월 (1~12)', en: 'Month (1–12)' },
+      { name: 'date.year', ts: `year(tz?: string): ${S}`, ko: '연도', en: 'Year' },
+      { name: 'date.isNew', ts: 'isNew(period?: Period, tz?: string): Cond', ko: "새 하루('D', 기본) · 주('W', 월요일 시작) · 달('M') · 해('Y')의 첫 봉에서 참", en: "True on the first bar of each day ('D', default), week ('W', from Monday), month ('M') or year ('Y')", example: "bgcolor(date.isNew('W'), { color: color.alpha(color.gray, 0.15) })" },
+      { name: 'date.session', ts: 'session(spec: string, tz?: string): Cond', ko: "봉 시작이 'HHMM-HHMM' 시간 안이면 참 (끝이 더 이르면 자정을 넘김: '2200-0200')", en: "True on bars opening inside 'HHMM-HHMM' (an earlier end runs past midnight: '2200-0200')", example: "date.session('0900-1530', 'Asia/Seoul')" },
+    ],
+  },
+  {
     id: 'input',
     ko: '입력값',
     en: 'Inputs',
@@ -106,6 +123,9 @@ export const GROUPS: SpecGroup[] = [
       { name: 'input.source', ts: "source(label: string, def?: 'close' | 'open' | 'high' | 'low' | 'hl2' | 'hlc3' | 'ohlc4' | 'hlcc4', o?: InputOptions): Series", ko: '기준 가격 고르기 (종가·시가…)', en: 'Which price to use (close, open…)', example: "const src = input.source('Source', 'close')" },
       { name: 'input.text', ts: 'text(label: string, def?: string, o?: InputOptions): string', ko: "사용자가 적는 글자 (예: 선 번호 목록 '1,3,6'). 200자까지", en: "Text the user types (e.g. a list like '1,3,6'); up to 200 characters", example: "const list = input.text('Lines', '1,3,6')" },
       { name: 'input.color', ts: 'color(label: string, def: Color, o?: InputOptions): Color', ko: '사용자가 고르는 색', en: 'A color the user picks', example: "const c = input.color('Line color', color.orange, { group: 'Style' })" },
+      { name: 'input.timeframe', ts: 'timeframe(label: string, def?: Timeframe, o?: InputOptions): Timeframe', ko: "사용자가 고르는 주기 (request.bars에 넘겨요). 기본 '1D'", en: "An interval the user picks (for request.bars); default '1D'", example: "const tf = input.timeframe('Higher timeframe', '240')" },
+      { name: 'input.symbol', ts: 'symbol(label: string, def: string, o?: InputOptions): string', ko: "사용자가 고르는 종목 ('BINANCEF:ETHUSDT'처럼 거래소:종목). request.bars · request.data에 넘겨요", en: "A market the user picks ('BINANCEF:ETHUSDT', exchange:symbol), for request.bars / request.data", example: "const other = input.symbol('Compare with', 'BINANCEF:ETHUSDT')" },
+      { name: 'input.time', ts: 'time(label: string, def: number | string, o?: InputOptions): number', ko: "사용자가 고르는 시각 (UTC 밀리초). 기본값은 숫자나 '2026-01-01T00:00:00Z' 같은 날짜. 앵커 VWAP 시작점 등", en: "A moment the user picks (UTC ms); the default is a number or a date like '2026-01-01T00:00:00Z'. For an anchored VWAP's start, …", example: "const from = input.time('Anchor', '2026-01-01T00:00:00Z')" },
     ],
   },
   {
@@ -123,6 +143,9 @@ export const GROUPS: SpecGroup[] = [
       { name: 'ta.tema', ts: `tema(src: ${SRC}, length: ${N}): ${S}`, ko: '삼중 지수 이동평균', en: 'Triple EMA' },
       { name: 'ta.linreg', ts: `linreg(src: ${SRC}, length: ${N}, offset?: ${N}): ${S}`, ko: '선형회귀(최소제곱) 선의 값 = LSMA. offset만큼 뒤의 값', en: 'Least-squares regression value (LSMA); offset reads that many bars back', example: 'ta.linreg(close, 25, 0)' },
       { name: 'ta.alma', ts: `alma(src: ${SRC}, length: ${N}, offset?: ${N}, sigma?: ${N}): ${S}`, ko: '아르노 르구 이동평균 (기본 offset 0.85, sigma 6)', en: 'Arnaud Legoux moving average (default offset 0.85, sigma 6)', example: 'ta.alma(close, 9, 0.85, 6)' },
+      { name: 'ta.swma', ts: `swma(src: ${SRC}): ${S}`, ko: '최근 4봉 대칭 가중 평균 (1/6, 2/6, 2/6, 1/6)', en: 'Symmetrically weighted average of the last 4 values (1/6, 2/6, 2/6, 1/6)' },
+      { name: 'ta.vwap', ts: `vwap(src?: ${SRC}, anchor?: Period | Bool): ${S}`, ko: "거래량 가중 평균가. anchor마다 새로 시작: 'D'(하루, 기본) · 'W'(주) · 'M'(달) · 'Y'(해)는 거래소 시간대 기준(코인 UTC, 국내주식 한국 시간), 조건을 주면 그 조건이 참인 봉부터. src 기본 hlc3", en: "Volume-weighted average price, starting over at each anchor: 'D' (day, default), 'W', 'M', 'Y' in the market's time zone (crypto UTC, Korean stocks Seoul), or a condition (from the bars where it is true). src defaults to hlc3", example: "ta.vwap(hlc3, 'D')" },
+      { name: 'ta.vwapbands', ts: `vwapbands(src?: ${SRC}, anchor?: Period | Bool, mult?: ${N}): { vwap: ${S}; upper: ${S}; lower: ${S} }`, ko: 'VWAP와 위아래 밴드 (거래량 가중 표준편차 × mult, 기본 1)', en: 'VWAP with bands at ± mult × the volume-weighted standard deviation (default 1)', example: "const v = ta.vwapbands(hlc3, 'W', 2)" },
     ],
   },
   {
@@ -137,6 +160,11 @@ export const GROUPS: SpecGroup[] = [
       { name: 'ta.mfi', ts: `mfi(length?: ${N}): ${S}`, ko: '자금흐름지수 (0~100, hlc3와 거래량)', en: 'Money flow index (0–100, from hlc3 and volume)' },
       { name: 'ta.roc', ts: `roc(src: ${SRC}, length: ${N}): ${S}`, ko: 'length봉 전 대비 변화율 (%)', en: 'Rate of change vs length bars ago (%)' },
       { name: 'ta.mom', ts: `mom(src: ${SRC}, length?: ${N}): ${S}`, ko: 'length봉 전 대비 변화량', en: 'Momentum: change vs length bars ago' },
+      { name: 'ta.wpr', ts: `wpr(length?: ${N}): ${S}`, ko: '윌리엄스 %R (−100~0, 기본 14)', en: 'Williams %R (−100 to 0, default 14)', example: 'ta.wpr(14)' },
+      { name: 'ta.cmo', ts: `cmo(src: ${SRC}, length?: ${N}): ${S}`, ko: '샹드 모멘텀 오실레이터 (−100~100, 기본 9)', en: 'Chande momentum oscillator (−100 to 100, default 9)' },
+      { name: 'ta.tsi', ts: `tsi(src: ${SRC}, short?: ${N}, long?: ${N}): ${S}`, ko: 'TSI (−1~1, 파인과 같음. 화면용은 × 100). 기본 13, 25', en: 'True strength index, −1 to 1 as in Pine (× 100 for the usual display); default 13, 25' },
+      { name: 'ta.cog', ts: `cog(src: ${SRC}, length?: ${N}): ${S}`, ko: '무게중심 오실레이터 (기본 10)', en: 'Center of gravity (default 10)' },
+      { name: 'ta.rci', ts: `rci(src: ${SRC}, length?: ${N}): ${S}`, ko: '순위 상관 지수 RCI (−100~100, 기본 9). 100이면 봉마다 앞 봉보다 높음', en: 'Rank correlation index (−100 to 100, default 9); 100 = each value higher than the one before' },
     ],
   },
   {
@@ -148,6 +176,12 @@ export const GROUPS: SpecGroup[] = [
       { name: 'ta.tr', ts: `tr(): ${S}`, ko: '실제 범위', en: 'True range' },
       { name: 'ta.bb', ts: `bb(src: ${SRC}, length?: ${N}, mult?: ${N}): { upper: ${S}; mid: ${S}; lower: ${S}; width: ${S} }`, ko: '볼린저 밴드 (기본 20, 2). width = (위 − 아래) / 중간', en: 'Bollinger Bands (default 20, 2); width = (upper − lower) / mid', example: 'const band = ta.bb(close, 20, 2)' },
       { name: 'ta.stdev', ts: `stdev(src: ${SRC}, length: ${N}): ${S}`, ko: '표준편차', en: 'Standard deviation' },
+      { name: 'ta.bbw', ts: `bbw(src: ${SRC}, length?: ${N}, mult?: ${N}): ${S}`, ko: '볼린저 밴드 폭 (위 − 아래) / 중간', en: 'Bollinger band width: (upper − lower) / mid' },
+      { name: 'ta.kc', ts: `kc(src: ${SRC}, length?: ${N}, mult?: ${N}, useTrueRange?: boolean): { upper: ${S}; mid: ${S}; lower: ${S} }`, ko: '켈트너 채널: EMA ± mult × 실제 범위의 EMA (기본 20, 2). useTrueRange false면 고가 − 저가', en: 'Keltner channels: EMA ± mult × the EMA of the true range (default 20, 2); useTrueRange false uses high − low', example: 'const k = ta.kc(close, 20, 2)' },
+      { name: 'ta.kcw', ts: `kcw(src: ${SRC}, length?: ${N}, mult?: ${N}, useTrueRange?: boolean): ${S}`, ko: '켈트너 채널 폭 (위 − 아래) / 중간', en: 'Keltner channel width: (upper − lower) / mid' },
+      { name: 'ta.sar', ts: `sar(start?: ${N}, inc?: ${N}, max?: ${N}): ${S}`, ko: '파라볼릭 SAR (기본 0.02, 0.02, 0.2). 가격 아래면 상승 추세', en: 'Parabolic SAR (default 0.02, 0.02, 0.2); below the price = uptrend', example: "plot('SAR', ta.sar(0.02, 0.02, 0.2), { style: 'cross' })" },
+      { name: 'ta.ichimoku', ts: `ichimoku(conversion?: ${N}, base?: ${N}, spanB?: ${N}): { conversion: ${S}; base: ${S}; spanA: ${S}; spanB: ${S} }`, ko: '일목균형표 전환선 · 기준선 · 선행스팬 A · B (기본 9, 26, 52). 밀리지 않은 값: 선행스팬은 plot의 offset: 25(기준 − 1), 후행스팬은 close를 offset: -25로', en: 'Ichimoku conversion, base, span A and B (default 9, 26, 52), not shifted: plot the spans with offset: 25 (base − 1) and the lagging line as close with offset: -25', example: 'const ich = ta.ichimoku(9, 26, 52)' },
+      { name: 'ta.pivots', ts: `pivots(type?: 'traditional' | 'fibonacci' | 'woodie' | 'classic' | 'camarilla', anchor?: Period | Bool): { p: ${S}; r1: ${S}; r2: ${S}; r3: ${S}; s1: ${S}; s2: ${S}; s3: ${S} }`, ko: "피벗 포인트: 앞 기간(anchor, 기본 'D')의 고가 · 저가 · 종가로 이번 기간 내내 같은 값. 첫 기간은 NaN", en: "Pivot points from the previous period's (anchor, default 'D') high, low and close, the same all through the current period; NaN in the first one", example: "const pv = ta.pivots('traditional', 'D')" },
       { name: 'ta.dmi', ts: `dmi(length?: ${N}, adxSmoothing?: ${N}): { plus: ${S}; minus: ${S}; adx: ${S} }`, ko: '방향성 지수 +DI, −DI, ADX', en: 'Directional movement: +DI, −DI and ADX' },
       { name: 'ta.adx', ts: `adx(length?: ${N}, smoothing?: ${N}): ${S}`, ko: 'ADX (추세 강도)', en: 'ADX (trend strength)' },
       { name: 'ta.supertrend', ts: `supertrend(factor?: ${N}, atrLength?: ${N}): { line: ${S}; dir: ${S} }`, ko: '슈퍼트렌드 (기본 3, 10). dir: 1 상승, −1 하락', en: 'SuperTrend (default 3, 10); dir 1 = up, −1 = down', example: 'const st = ta.supertrend(3, 10)' },
@@ -160,9 +194,35 @@ export const GROUPS: SpecGroup[] = [
     items: [
       { name: 'ta.highest', ts: `highest(src: ${SRC}, length: ${N}): ${S}`, ko: '최근 length봉 최고값', en: 'Highest value of the last length bars', example: 'ta.highest(high, 20)' },
       { name: 'ta.lowest', ts: `lowest(src: ${SRC}, length: ${N}): ${S}`, ko: '최근 length봉 최저값', en: 'Lowest value of the last length bars' },
+      { name: 'ta.highestbars', ts: `highestbars(src: ${SRC}, length: ${N}): ${S}`, ko: '최근 length봉 중 최고값이 몇 봉 전인지 (0 = 이 봉, 같으면 최근 것). 파인과 달리 양수', en: 'How many bars back the highest of the last length values is (0 = this bar, the latest on a tie); positive, unlike Pine' },
+      { name: 'ta.lowestbars', ts: `lowestbars(src: ${SRC}, length: ${N}): ${S}`, ko: '최근 length봉 중 최저값이 몇 봉 전인지 (양수)', en: 'How many bars back the lowest of the last length values is (positive)' },
+      { name: 'ta.max', ts: `max(src: ${SRC}): ${S}`, ko: '처음부터 지금까지의 최고값', en: 'Highest value so far (all bars up to this one)' },
+      { name: 'ta.min', ts: `min(src: ${SRC}): ${S}`, ko: '처음부터 지금까지의 최저값', en: 'Lowest value so far' },
       { name: 'ta.change', ts: `change(src: ${SRC}, length?: ${N}): ${S}`, ko: 'length봉 전 대비 변화 (기본 1)', en: 'Change vs length bars ago (default 1)' },
       { name: 'ta.cum', ts: `cum(src: ${SRC}): ${S}`, ko: '누적 합 (NaN은 0으로)', en: 'Running total (NaN counts as 0)' },
       { name: 'ta.obv', ts: `obv(): ${S}`, ko: '온밸런스 볼륨', en: 'On-balance volume' },
+      { name: 'ta.accdist', ts: `accdist(): ${S}`, ko: '매집 · 분산 (A/D)', en: 'Accumulation / distribution' },
+      { name: 'ta.pvt', ts: `pvt(): ${S}`, ko: '가격 거래량 추세 (PVT)', en: 'Price-volume trend' },
+      { name: 'ta.nvi', ts: `nvi(): ${S}`, ko: '음의 거래량 지수 (거래량이 준 봉에서만 움직임, 1에서 시작)', en: 'Negative volume index (moves only on bars where volume fell; starts at 1)' },
+      { name: 'ta.pvi', ts: `pvi(): ${S}`, ko: '양의 거래량 지수 (거래량이 는 봉에서만 움직임, 1에서 시작)', en: 'Positive volume index (moves only on bars where volume rose; starts at 1)' },
+      { name: 'ta.wad', ts: `wad(): ${S}`, ko: '윌리엄스 매집 · 분산', en: 'Williams accumulation / distribution' },
+      { name: 'ta.wvad', ts: `wvad(): ${S}`, ko: '윌리엄스 변동 매집 · 분산 (봉마다)', en: 'Williams variable accumulation / distribution (per bar)' },
+      { name: 'ta.iii', ts: `iii(): ${S}`, ko: '일중 강도 지수 (봉마다)', en: 'Intraday intensity index (per bar)' },
+    ],
+  },
+  {
+    id: 'stats',
+    ko: '통계',
+    en: 'Statistics',
+    items: [
+      { name: 'ta.median', ts: `median(src: ${SRC}, length: ${N}): ${S}`, ko: '최근 length봉 중앙값', en: 'Median of the last length values' },
+      { name: 'ta.mode', ts: `mode(src: ${SRC}, length: ${N}): ${S}`, ko: '최근 length봉 최빈값 (같으면 작은 값)', en: 'Most frequent of the last length values (the smallest on a tie)' },
+      { name: 'ta.percentile', ts: `percentile(src: ${SRC}, length: ${N}, percent: ${N}): ${S}`, ko: '최근 length봉에서 percent(0~100) 위치의 값 (사이 값은 보간)', en: 'The value at percent (0–100) of the last length values, interpolated', example: 'ta.percentile(close, 100, 90)' },
+      { name: 'ta.percentrank', ts: `percentrank(src: ${SRC}, length: ${N}): ${S}`, ko: '앞의 length봉 중 지금 값 이하인 비율 (%)', en: '% of the previous length values at or below this one' },
+      { name: 'ta.range', ts: `range(src: ${SRC}, length: ${N}): ${S}`, ko: '최근 length봉 최고 − 최저', en: 'Highest − lowest of the last length values' },
+      { name: 'ta.dev', ts: `dev(src: ${SRC}, length: ${N}): ${S}`, ko: '평균 절대 편차', en: 'Mean absolute deviation' },
+      { name: 'ta.variance', ts: `variance(src: ${SRC}, length: ${N}): ${S}`, ko: '분산 (stdev의 제곱)', en: 'Variance (stdev squared)' },
+      { name: 'ta.correlation', ts: `correlation(a: ${SRC}, b: ${SRC}, length: ${N}): ${S}`, ko: '최근 length봉의 상관계수 (−1~1)', en: 'Correlation of a and b over the last length bars (−1 to 1)', example: 'ta.correlation(close, volume, 50)' },
     ],
   },
   {
@@ -300,10 +360,10 @@ export const GROUPS: SpecGroup[] = [
     items: [
       {
         name: 'strategy',
-        ts: 'function strategy(o: { long?: Bool; longExit?: Bool; short?: Bool; shortExit?: Bool; stopLoss?: number | Series | { long?: number | Series; short?: number | Series }; takeProfit?: number | Series | { long?: number | Series; short?: number | Series }; trailingStop?: number; size?: number; capital?: number; fee?: number; slippage?: number; reverse?: boolean }): void',
-        ko: '백테스트 전략 (한 번만). 신호는 다음 봉 시가에 체결. long·short: 진입 조건, longExit·shortExit: 청산 조건(없으면 손절·익절·반대 신호로만). stopLoss·takeProfit: 진입가에서 %(숫자) 또는 봉마다 가격(시리즈, 전 봉 값을 씀). 롱·숏이 다르면 { long, short }로 따로(가격 시리즈 손절을 양방향 전략에 하나로 주면 숏에도 같은 선이 걸려요), 빠진 쪽은 없음. trailingStop: 최고(숏은 최저)가에서 % 되돌림. 같은 봉에 손절·익절이 다 닿으면 손절. size: 한 번에 쓰는 자산 %(기본 100). capital: 시작 금액(기본 10000). fee·slippage: 체결마다 %(없으면 화면 설정). reverse: 반대 신호에 뒤집기(기본 true). 예전 { entry, exit, side }도 돼요',
-        en: 'The backtest strategy (once). Signals fill at the next bar’s open. long / short: entry conditions; longExit / shortExit: exits (without them, only stops, targets and the other side’s entry close). stopLoss / takeProfit: % from the entry (a number) or a price per bar (a series; the bar before’s value is used). For a different level per side give { long, short } (one price series in a two-way strategy would sit on the same line for shorts too); a side left out has none. trailingStop: % back from the best price. A bar touching both stop and target takes the stop. size: % of the account per trade (default 100). capital: starting money (default 10000). fee / slippage: % per fill (default: the viewer’s settings). reverse: an entry the other way turns the position (default true). The old { entry, exit, side } still works',
-        example: 'strategy({ long: ta.crossover(fast, slow), short: ta.crossunder(fast, slow), stopLoss: { long: sub(low, ta.atr(14)), short: add(high, ta.atr(14)) }, takeProfit: 4 })',
+        ts: 'function strategy(o: { long?: Bool; longExit?: Bool; short?: Bool; shortExit?: Bool; stopLoss?: number | Series | { long?: number | Series; short?: number | Series }; takeProfit?: number | Series | Target[] | { long?: number | Series | Target[]; short?: number | Series | Target[] }; trailingStop?: number; breakEven?: boolean; exitAfter?: number; entryPrice?: Series | { long?: Series; short?: Series }; entryBars?: number; pyramiding?: number; leverage?: number; size?: number; amount?: number; qty?: number; capital?: number; fee?: number; slippage?: number; reverse?: boolean }): void',
+        ko: '백테스트 전략 (한 번만). 신호는 다음 봉 시가에 체결. long·short: 진입 조건, longExit·shortExit: 청산 조건(없으면 손절·익절·반대 신호로만). stopLoss·takeProfit: 진입가에서 %(숫자) 또는 봉마다 가격(시리즈, 전 봉 값을 씀). 롱·숏이 다르면 { long, short }로 따로, 빠진 쪽은 없음. takeProfit을 목록으로 주면 나눠 익절: [{ at: 2, close: 50 }, { at: 5 }]는 +2%에 절반, +5%에 나머지(close는 포지션의 %, 마지막 것을 비우면 나머지 전부). breakEven: true면 첫 목표 다음 봉부터 손절이 진입가. trailingStop: 최고(숏은 최저)가에서 % 되돌림. exitAfter: 진입 N봉 뒤 시가에 청산. entryPrice: 신호 봉의 이 가격에 주문(롱은 종가보다 아래면 지정가, 위면 돌파 주문)을 내고 entryBars봉(기본 1) 기다림. pyramiding: 같은 방향 최대 진입 횟수(기본 1, 평균 단가로 합침, size를 100보다 작게). leverage: 선물 레버리지(기본 1, 증거금을 다 잃으면 강제 청산, 수수료는 레버리지 곱한 금액에). size: 한 번에 쓰는 자산 %(기본 100), 대신 amount(진입마다 금액, capital 단위) 또는 qty(진입마다 수량). capital: 시작 금액(기본 10000). fee·slippage: 체결마다 %(없으면 화면 설정). 같은 봉에 손절·익절이 다 닿으면 손절. reverse: 반대 신호에 뒤집기(기본 true). 예전 { entry, exit, side }도 돼요',
+        en: 'The backtest strategy (once). Signals fill at the next bar’s open. long / short: entry conditions; longExit / shortExit: exits (without them, only stops, targets and the other side’s entry close). stopLoss / takeProfit: % from the entry (a number) or a price per bar (a series; the bar before’s value is used); per side with { long, short } (a side left out has none). A list as takeProfit takes profit in parts: [{ at: 2, close: 50 }, { at: 5 }] is half at +2%, the rest at +5% (close is a % of the position; left out on the last one: the rest). breakEven: true moves the stop to the entry price from the bar after the first target. trailingStop: % back from the best price. exitAfter: close at the open N bars after the entry. entryPrice: an order at this price of the signal bar (for a long, below the close a limit, above it a breakout stop), waiting entryBars bars (default 1). pyramiding: most entries one way (default 1; one position at the average price; keep size under 100). leverage: futures leverage (default 1; liquidated when the margin is gone; fees on the leveraged value). size: % of the account per entry (default 100), or amount (money per entry, in capital’s units) or qty (quantity per entry). capital: starting money (default 10000). fee / slippage: % per fill (default: the viewer’s settings). A bar touching both stop and target takes the stop. reverse: an entry the other way turns the position (default true). The old { entry, exit, side } still works',
+        example: 'strategy({ long: ta.crossover(fast, slow), short: ta.crossunder(fast, slow), stopLoss: 2, takeProfit: [{ at: 2, close: 50 }, { at: 5 }], breakEven: true })',
       },
       {
         name: 'alert',
@@ -343,13 +403,17 @@ type Position = 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middl
 type Shape = 'triangleup' | 'triangledown' | 'arrowup' | 'arrowdown' | 'circle' | 'square' | 'diamond' | 'cross' | 'xcross' | 'flag';
 /** Where a mark sits: over the bar's high, under its low, at a given price, or at the pane's top / bottom edge. */
 type Place = 'above' | 'below' | 'price' | 'top' | 'bottom';
+/** A period in the market's time zone: a day, a week (from Monday), a month, a year. */
+type Period = 'D' | 'W' | 'M' | 'Y';
 /** A bar length: minutes, or 1D / 1W / 1M. */
 type Timeframe = '1' | '3' | '5' | '15' | '30' | '60' | '120' | '240' | '1D' | '1W' | '1M';
 /** What compute's function gets: the requested bars (open, high, low, close, volume, time, bar.count) and ta / calc working on them. */
 type RequestedBars = { open: Series; high: Series; low: Series; close: Series; volume: Series; time: Series; bar: { count: number }; ta: typeof ta; add: typeof add; sub: typeof sub; mul: typeof mul; div: typeof div; max: typeof max; min: typeof min; abs: typeof abs; avg: typeof avg; gt: typeof gt; lt: typeof lt; gte: typeof gte; lte: typeof lte; eq: typeof eq; and: typeof and; or: typeof or; not: typeof not; prev: typeof prev; last: typeof last; nz: typeof nz; fixnan: typeof fixnan; map: typeof map };
 type DataName = 'funding' | 'openInterest' | 'longShortRatio' | 'topLongShortRatio' | 'kimchiPremium' | 'cvd' | 'fearGreed' | 'coinbasePremium' | 'dvol' | 'stablecoins';
 /** Where an input is shown: a section (group), a shared row (inline), a note (tooltip). */
-type InputOptions = { group?: string; inline?: string; tooltip?: string };`;
+type InputOptions = { group?: string; inline?: string; tooltip?: string };
+/** A partial target: at a % from the entry (or a price series), close this % of the position (left out on the last one: the rest). */
+type Target = { at: number | Series; close?: number };`;
 
 /** Every name in scope, from the spec (test/spec.test.ts checks the runtime has exactly these). */
 export const SPEC_NAMES = GROUPS.flatMap((g) => g.items.map((i) => i.name));

@@ -139,10 +139,15 @@ export interface BacktestSummary {
   maxLosingStreak: number;
   long: { trades: number; returnPct: number };
   short: { trades: number; returnPct: number };
-  /** Trades closed by each reason: signal, reverse, stop, take, trail, end. */
+  /** Trades closed by each reason: signal, reverse, stop, take, trail, time, liquidation, end. */
   exits: Record<string, number>;
   finalEquity: number;
-  recentTrades: { side: string; entry: string; exit: string; returnPct: number; reason: string; open: boolean }[];
+  /** Leverage used (1: none). */
+  leverage: number;
+  /** The last 12 calendar months (UTC). */
+  monthly: { month: string; returnPct: number }[];
+  /** part: the share of the position this exit closed (under 100 for a partial target); entries: more than 1 with pyramiding. */
+  recentTrades: { side: string; entry: string; exit: string; returnPct: number; reason: string; open: boolean; partPct: number; entries: number }[];
 }
 
 const pct = (v: number | null) => (v === null ? null : Number((v * 100).toFixed(2)));
@@ -168,6 +173,8 @@ export function backtestSummary(r: RunResult, bars: Bars, options?: BacktestOpti
     short: { trades: b.short.trades, returnPct: pct(b.short.ret)! },
     exits: b.reasons,
     finalEquity: Math.round(b.finalEquity * 100) / 100,
-    recentTrades: b.trades.slice(-10).map((t) => ({ side: t.side, entry: iso(t.entryTime), exit: iso(t.exitTime), returnPct: pct(t.ret)!, reason: t.reason, open: t.open })),
+    leverage: b.leverage,
+    monthly: b.monthly.slice(-12).map((m) => ({ month: m.month, returnPct: pct(m.ret)! })),
+    recentTrades: b.trades.slice(-10).map((t) => ({ side: t.side, entry: iso(t.entryTime), exit: iso(t.exitTime), returnPct: pct(t.ret)!, reason: t.reason, open: t.open, partPct: pct(t.part)!, entries: t.entries })),
   };
 }

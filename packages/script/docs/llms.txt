@@ -48,6 +48,8 @@ type Position = 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middl
 type Shape = 'triangleup' | 'triangledown' | 'arrowup' | 'arrowdown' | 'circle' | 'square' | 'diamond' | 'cross' | 'xcross' | 'flag';
 /** Where a mark sits: over the bar's high, under its low, at a given price, or at the pane's top / bottom edge. */
 type Place = 'above' | 'below' | 'price' | 'top' | 'bottom';
+/** A period in the market's time zone: a day, a week (from Monday), a month, a year. */
+type Period = 'D' | 'W' | 'M' | 'Y';
 /** A bar length: minutes, or 1D / 1W / 1M. */
 type Timeframe = '1' | '3' | '5' | '15' | '30' | '60' | '120' | '240' | '1D' | '1W' | '1M';
 /** What compute's function gets: the requested bars (open, high, low, close, volume, time, bar.count) and ta / calc working on them. */
@@ -55,6 +57,8 @@ type RequestedBars = { open: Series; high: Series; low: Series; close: Series; v
 type DataName = 'funding' | 'openInterest' | 'longShortRatio' | 'topLongShortRatio' | 'kimchiPremium' | 'cvd' | 'fearGreed' | 'coinbasePremium' | 'dvol' | 'stablecoins';
 /** Where an input is shown: a section (group), a shared row (inline), a note (tooltip). */
 type InputOptions = { group?: string; inline?: string; tooltip?: string };
+/** A partial target: at a % from the entry (or a price series), close this % of the position (left out on the last one: the rest). */
+type Target = { at: number | Series; close?: number };
 ```
 
 ## Names in scope
@@ -76,9 +80,22 @@ type InputOptions = { group?: string; inline?: string; tooltip?: string };
 - `ohlc4` — `const ohlc4: Series` — (open + high + low + close) / 4
 - `hlcc4` — `const hlcc4: Series` — (high + low + 2 × close) / 4
 - `turnover` — `const turnover: Series` — Value traded per bar (where the exchange gives it, else NaN)
-- `bar.count` — `const bar: { count: number }` — Number of bars
 - `request.bars` — `bars(o: { symbol?: string; timeframe?: Timeframe }): { open: Series; high: Series; low: Series; close: Series; volume: Series; time: Series; compute<T extends Series | Record<string, Series>>(fn: (b: RequestedBars) => T): T }` — Bars of another timeframe or symbol, lined up with this chart’s bars. A bar is seen only once it has closed by the chart bar’s close (no look-ahead): on an hourly chart, the daily value changes after the day ends. To calculate on those bars use compute: d.compute((b) => b.ta.ema(b.close, 20)) is the daily 20 EMA. Up to 4 Example: `const d = request.bars({ timeframe: '1D' })`
 - `request.data` — `data(name: DataName, o?: { symbol?: string }): Series` — Market data lined up with this chart’s bars: funding (%), openInterest ($M), longShortRatio / topLongShortRatio, kimchiPremium (%), cvd, fearGreed (0–100), coinbasePremium (%), dvol, stablecoins ($B). Mostly for Binance futures symbols. Up to 8 Example: `const f = request.data('funding')`
+
+### Market · interval · time
+
+- `bar` — `const bar: { count: number; index: Series; last: number; confirmed: boolean }` — The bars: count, index (0, 1, 2… as a series), last (the latest index), confirmed (the latest bar has closed; false while it is forming) Example: `map((i) => (i === bar.last && !bar.confirmed ? NaN : close[i]))`
+- `syminfo` — `const syminfo: { symbol: string; ticker: string; exchange: string; name: string; market: 'spot' | 'perp' | 'stock' | 'index' | 'other' | 'unknown'; currency: string; base: string; tick: number; timezone: string }` — The market: symbol 'BINANCEF:BTCUSDT', ticker 'BTCUSDT', exchange 'BINANCEF', market (spot, perp, stock…), currency 'USDT' / 'KRW', tick (the price step at the latest price; NaN when unknown), timezone (the market's: 'UTC' for crypto, 'Asia/Seoul' for Korean stocks). Unknown text is '' Example: `const step = Number.isNaN(syminfo.tick) ? 0.01 : syminfo.tick`
+- `timeframe` — `const timeframe: { period: string; minutes: number; seconds: number; isIntraday: boolean; isDaily: boolean; isWeekly: boolean; isMonthly: boolean }` — The chart's interval: period ('60', '1D', '1W'…), minutes per bar, isIntraday (shorter than a day)… Example: `const len = timeframe.isIntraday ? 50 : 20`
+- `date.hour` — `hour(tz?: string): Series` — The hour (0–23) each bar opens at, in the market's zone (syminfo.timezone) unless one is given, e.g. date.hour('Asia/Seoul') Example: `date.hour('Asia/Seoul')`
+- `date.minute` — `minute(tz?: string): Series` — The minute (0–59) each bar opens at
+- `date.dayofweek` — `dayofweek(tz?: string): Series` — Weekday: 0 Sunday … 6 Saturday (as in JavaScript, not Pine)
+- `date.day` — `day(tz?: string): Series` — Day of the month (1–31)
+- `date.month` — `month(tz?: string): Series` — Month (1–12)
+- `date.year` — `year(tz?: string): Series` — Year
+- `date.isNew` — `isNew(period?: Period, tz?: string): Cond` — True on the first bar of each day ('D', default), week ('W', from Monday), month ('M') or year ('Y') Example: `bgcolor(date.isNew('W'), { color: color.alpha(color.gray, 0.15) })`
+- `date.session` — `session(spec: string, tz?: string): Cond` — True on bars opening inside 'HHMM-HHMM' (an earlier end runs past midnight: '2200-0200') Example: `date.session('0900-1530', 'Asia/Seoul')`
 
 ### Inputs
 
@@ -89,6 +106,9 @@ type InputOptions = { group?: string; inline?: string; tooltip?: string };
 - `input.source` — `source(label: string, def?: 'close' | 'open' | 'high' | 'low' | 'hl2' | 'hlc3' | 'ohlc4' | 'hlcc4', o?: InputOptions): Series` — Which price to use (close, open…) Example: `const src = input.source('Source', 'close')`
 - `input.text` — `text(label: string, def?: string, o?: InputOptions): string` — Text the user types (e.g. a list like '1,3,6'); up to 200 characters Example: `const list = input.text('Lines', '1,3,6')`
 - `input.color` — `color(label: string, def: Color, o?: InputOptions): Color` — A color the user picks Example: `const c = input.color('Line color', color.orange, { group: 'Style' })`
+- `input.timeframe` — `timeframe(label: string, def?: Timeframe, o?: InputOptions): Timeframe` — An interval the user picks (for request.bars); default '1D' Example: `const tf = input.timeframe('Higher timeframe', '240')`
+- `input.symbol` — `symbol(label: string, def: string, o?: InputOptions): string` — A market the user picks ('BINANCEF:ETHUSDT', exchange:symbol), for request.bars / request.data Example: `const other = input.symbol('Compare with', 'BINANCEF:ETHUSDT')`
+- `input.time` — `time(label: string, def: number | string, o?: InputOptions): number` — A moment the user picks (UTC ms); the default is a number or a date like '2026-01-01T00:00:00Z'. For an anchored VWAP's start, … Example: `const from = input.time('Anchor', '2026-01-01T00:00:00Z')`
 
 ### Moving averages
 
@@ -102,6 +122,9 @@ type InputOptions = { group?: string; inline?: string; tooltip?: string };
 - `ta.tema` — `tema(src: Source, length: number): Series` — Triple EMA
 - `ta.linreg` — `linreg(src: Source, length: number, offset?: number): Series` — Least-squares regression value (LSMA); offset reads that many bars back Example: `ta.linreg(close, 25, 0)`
 - `ta.alma` — `alma(src: Source, length: number, offset?: number, sigma?: number): Series` — Arnaud Legoux moving average (default offset 0.85, sigma 6) Example: `ta.alma(close, 9, 0.85, 6)`
+- `ta.swma` — `swma(src: Source): Series` — Symmetrically weighted average of the last 4 values (1/6, 2/6, 2/6, 1/6)
+- `ta.vwap` — `vwap(src?: Source, anchor?: Period | Bool): Series` — Volume-weighted average price, starting over at each anchor: 'D' (day, default), 'W', 'M', 'Y' in the market's time zone (crypto UTC, Korean stocks Seoul), or a condition (from the bars where it is true). src defaults to hlc3 Example: `ta.vwap(hlc3, 'D')`
+- `ta.vwapbands` — `vwapbands(src?: Source, anchor?: Period | Bool, mult?: number): { vwap: Series; upper: Series; lower: Series }` — VWAP with bands at ± mult × the volume-weighted standard deviation (default 1) Example: `const v = ta.vwapbands(hlc3, 'W', 2)`
 
 ### Oscillators
 
@@ -112,6 +135,11 @@ type InputOptions = { group?: string; inline?: string; tooltip?: string };
 - `ta.mfi` — `mfi(length?: number): Series` — Money flow index (0–100, from hlc3 and volume)
 - `ta.roc` — `roc(src: Source, length: number): Series` — Rate of change vs length bars ago (%)
 - `ta.mom` — `mom(src: Source, length?: number): Series` — Momentum: change vs length bars ago
+- `ta.wpr` — `wpr(length?: number): Series` — Williams %R (−100 to 0, default 14) Example: `ta.wpr(14)`
+- `ta.cmo` — `cmo(src: Source, length?: number): Series` — Chande momentum oscillator (−100 to 100, default 9)
+- `ta.tsi` — `tsi(src: Source, short?: number, long?: number): Series` — True strength index, −1 to 1 as in Pine (× 100 for the usual display); default 13, 25
+- `ta.cog` — `cog(src: Source, length?: number): Series` — Center of gravity (default 10)
+- `ta.rci` — `rci(src: Source, length?: number): Series` — Rank correlation index (−100 to 100, default 9); 100 = each value higher than the one before
 
 ### Volatility · trend
 
@@ -119,6 +147,12 @@ type InputOptions = { group?: string; inline?: string; tooltip?: string };
 - `ta.tr` — `tr(): Series` — True range
 - `ta.bb` — `bb(src: Source, length?: number, mult?: number): { upper: Series; mid: Series; lower: Series; width: Series }` — Bollinger Bands (default 20, 2); width = (upper − lower) / mid Example: `const band = ta.bb(close, 20, 2)`
 - `ta.stdev` — `stdev(src: Source, length: number): Series` — Standard deviation
+- `ta.bbw` — `bbw(src: Source, length?: number, mult?: number): Series` — Bollinger band width: (upper − lower) / mid
+- `ta.kc` — `kc(src: Source, length?: number, mult?: number, useTrueRange?: boolean): { upper: Series; mid: Series; lower: Series }` — Keltner channels: EMA ± mult × the EMA of the true range (default 20, 2); useTrueRange false uses high − low Example: `const k = ta.kc(close, 20, 2)`
+- `ta.kcw` — `kcw(src: Source, length?: number, mult?: number, useTrueRange?: boolean): Series` — Keltner channel width: (upper − lower) / mid
+- `ta.sar` — `sar(start?: number, inc?: number, max?: number): Series` — Parabolic SAR (default 0.02, 0.02, 0.2); below the price = uptrend Example: `plot('SAR', ta.sar(0.02, 0.02, 0.2), { style: 'cross' })`
+- `ta.ichimoku` — `ichimoku(conversion?: number, base?: number, spanB?: number): { conversion: Series; base: Series; spanA: Series; spanB: Series }` — Ichimoku conversion, base, span A and B (default 9, 26, 52), not shifted: plot the spans with offset: 25 (base − 1) and the lagging line as close with offset: -25 Example: `const ich = ta.ichimoku(9, 26, 52)`
+- `ta.pivots` — `pivots(type?: 'traditional' | 'fibonacci' | 'woodie' | 'classic' | 'camarilla', anchor?: Period | Bool): { p: Series; r1: Series; r2: Series; r3: Series; s1: Series; s2: Series; s3: Series }` — Pivot points from the previous period's (anchor, default 'D') high, low and close, the same all through the current period; NaN in the first one Example: `const pv = ta.pivots('traditional', 'D')`
 - `ta.dmi` — `dmi(length?: number, adxSmoothing?: number): { plus: Series; minus: Series; adx: Series }` — Directional movement: +DI, −DI and ADX
 - `ta.adx` — `adx(length?: number, smoothing?: number): Series` — ADX (trend strength)
 - `ta.supertrend` — `supertrend(factor?: number, atrLength?: number): { line: Series; dir: Series }` — SuperTrend (default 3, 10); dir 1 = up, −1 = down Example: `const st = ta.supertrend(3, 10)`
@@ -127,9 +161,31 @@ type InputOptions = { group?: string; inline?: string; tooltip?: string };
 
 - `ta.highest` — `highest(src: Source, length: number): Series` — Highest value of the last length bars Example: `ta.highest(high, 20)`
 - `ta.lowest` — `lowest(src: Source, length: number): Series` — Lowest value of the last length bars
+- `ta.highestbars` — `highestbars(src: Source, length: number): Series` — How many bars back the highest of the last length values is (0 = this bar, the latest on a tie); positive, unlike Pine
+- `ta.lowestbars` — `lowestbars(src: Source, length: number): Series` — How many bars back the lowest of the last length values is (positive)
+- `ta.max` — `max(src: Source): Series` — Highest value so far (all bars up to this one)
+- `ta.min` — `min(src: Source): Series` — Lowest value so far
 - `ta.change` — `change(src: Source, length?: number): Series` — Change vs length bars ago (default 1)
 - `ta.cum` — `cum(src: Source): Series` — Running total (NaN counts as 0)
 - `ta.obv` — `obv(): Series` — On-balance volume
+- `ta.accdist` — `accdist(): Series` — Accumulation / distribution
+- `ta.pvt` — `pvt(): Series` — Price-volume trend
+- `ta.nvi` — `nvi(): Series` — Negative volume index (moves only on bars where volume fell; starts at 1)
+- `ta.pvi` — `pvi(): Series` — Positive volume index (moves only on bars where volume rose; starts at 1)
+- `ta.wad` — `wad(): Series` — Williams accumulation / distribution
+- `ta.wvad` — `wvad(): Series` — Williams variable accumulation / distribution (per bar)
+- `ta.iii` — `iii(): Series` — Intraday intensity index (per bar)
+
+### Statistics
+
+- `ta.median` — `median(src: Source, length: number): Series` — Median of the last length values
+- `ta.mode` — `mode(src: Source, length: number): Series` — Most frequent of the last length values (the smallest on a tie)
+- `ta.percentile` — `percentile(src: Source, length: number, percent: number): Series` — The value at percent (0–100) of the last length values, interpolated Example: `ta.percentile(close, 100, 90)`
+- `ta.percentrank` — `percentrank(src: Source, length: number): Series` — % of the previous length values at or below this one
+- `ta.range` — `range(src: Source, length: number): Series` — Highest − lowest of the last length values
+- `ta.dev` — `dev(src: Source, length: number): Series` — Mean absolute deviation
+- `ta.variance` — `variance(src: Source, length: number): Series` — Variance (stdev squared)
+- `ta.correlation` — `correlation(a: Source, b: Source, length: number): Series` — Correlation of a and b over the last length bars (−1 to 1) Example: `ta.correlation(close, volume, 50)`
 
 ### Conditions
 
@@ -185,7 +241,7 @@ fill('Upper', 'Lower', { color: color.alpha(color.blue, 0.1) })`
 
 ### Strategy · alerts · debug
 
-- `strategy` — `function strategy(o: { long?: Bool; longExit?: Bool; short?: Bool; shortExit?: Bool; stopLoss?: number | Series | { long?: number | Series; short?: number | Series }; takeProfit?: number | Series | { long?: number | Series; short?: number | Series }; trailingStop?: number; size?: number; capital?: number; fee?: number; slippage?: number; reverse?: boolean }): void` — The backtest strategy (once). Signals fill at the next bar’s open. long / short: entry conditions; longExit / shortExit: exits (without them, only stops, targets and the other side’s entry close). stopLoss / takeProfit: % from the entry (a number) or a price per bar (a series; the bar before’s value is used). For a different level per side give { long, short } (one price series in a two-way strategy would sit on the same line for shorts too); a side left out has none. trailingStop: % back from the best price. A bar touching both stop and target takes the stop. size: % of the account per trade (default 100). capital: starting money (default 10000). fee / slippage: % per fill (default: the viewer’s settings). reverse: an entry the other way turns the position (default true). The old { entry, exit, side } still works Example: `strategy({ long: ta.crossover(fast, slow), short: ta.crossunder(fast, slow), stopLoss: { long: sub(low, ta.atr(14)), short: add(high, ta.atr(14)) }, takeProfit: 4 })`
+- `strategy` — `function strategy(o: { long?: Bool; longExit?: Bool; short?: Bool; shortExit?: Bool; stopLoss?: number | Series | { long?: number | Series; short?: number | Series }; takeProfit?: number | Series | Target[] | { long?: number | Series | Target[]; short?: number | Series | Target[] }; trailingStop?: number; breakEven?: boolean; exitAfter?: number; entryPrice?: Series | { long?: Series; short?: Series }; entryBars?: number; pyramiding?: number; leverage?: number; size?: number; amount?: number; qty?: number; capital?: number; fee?: number; slippage?: number; reverse?: boolean }): void` — The backtest strategy (once). Signals fill at the next bar’s open. long / short: entry conditions; longExit / shortExit: exits (without them, only stops, targets and the other side’s entry close). stopLoss / takeProfit: % from the entry (a number) or a price per bar (a series; the bar before’s value is used); per side with { long, short } (a side left out has none). A list as takeProfit takes profit in parts: [{ at: 2, close: 50 }, { at: 5 }] is half at +2%, the rest at +5% (close is a % of the position; left out on the last one: the rest). breakEven: true moves the stop to the entry price from the bar after the first target. trailingStop: % back from the best price. exitAfter: close at the open N bars after the entry. entryPrice: an order at this price of the signal bar (for a long, below the close a limit, above it a breakout stop), waiting entryBars bars (default 1). pyramiding: most entries one way (default 1; one position at the average price; keep size under 100). leverage: futures leverage (default 1; liquidated when the margin is gone; fees on the leveraged value). size: % of the account per entry (default 100), or amount (money per entry, in capital’s units) or qty (quantity per entry). capital: starting money (default 10000). fee / slippage: % per fill (default: the viewer’s settings). A bar touching both stop and target takes the stop. reverse: an entry the other way turns the position (default true). The old { entry, exit, side } still works Example: `strategy({ long: ta.crossover(fast, slow), short: ta.crossunder(fast, slow), stopLoss: 2, takeProfit: [{ at: 2, close: 50 }, { at: 5 }], breakEven: true })`
 - `alert` — `function alert(when: Bool, message?: string): void` — An alert (up to 10). Rings when the condition is true on a bar that just closed (a forming bar is judged when it closes), for the market and timeframe the user turned 'Get alerts' on for, while the terminal is open. message may hold {name} {symbol} {close} {time} Example: `alert(ta.crossover(fast, slow), '{symbol} golden cross at {close}')`
 - `screen` — `function screen(name: string, value: Series | Cond | number): void` — A screener column (up to 10): the value on the last bar. The screener runs the script on many markets and sorts and filters by it Example: `screen('RSI', ta.rsi(close, 14))`
 - `log` — `function log(...values: unknown[]): void` — Print values for checking (up to 50 lines)
@@ -443,4 +499,57 @@ const dailyUp = gt(daily.close, dailyEma)
 bgcolor(dailyUp, { color: color.green })
 const calm = map((i) => Number.isNaN(funding[i]) || funding[i] < 0.03)
 strategy({ long: and(and(ta.crossover(close, fast), dailyUp), calm), longExit: ta.crossunder(close, fast), stopLoss: 2 })
+```
+
+### 15-scale-out.js
+
+```js
+//@version=2
+// Take profit in parts: half at +2%, a quarter at +4%, the rest at +7%; after the first target
+// the stop moves to the entry (break-even). Entries wait for a small dip (a limit order under the
+// signal bar's close) for up to 3 bars, and a trade that goes nowhere is closed after 48 bars.
+indicator({ name: 'Scale-out trend', overlay: true })
+const len = input.int('Trend length', 50, { min: 10, max: 400 })
+const dip = input.number('Dip to buy (%)', 0.3, { min: 0, max: 5, step: 0.1 })
+
+const trend = ta.ema(close, len)
+const fast = ta.ema(close, 9)
+plot('Trend', trend, { color: color.gray, width: 2 })
+plot('Fast', fast, { color: color.orange })
+
+const up = gt(close, trend)
+strategy({
+  long: and(ta.crossover(fast, ta.ema(close, 21)), up),
+  longExit: ta.crossunder(close, trend),
+  entryPrice: mul(close, 1 - dip / 100),
+  entryBars: 3,
+  stopLoss: 2.5,
+  takeProfit: [{ at: 2, close: 50 }, { at: 4, close: 25 }, { at: 7 }],
+  breakEven: true,
+  exitAfter: 48,
+})
+```
+
+### 16-session-vwap.js
+
+```js
+//@version=2
+// The day's VWAP with ±1 / ±2 deviation bands, starting over each day in the market's time zone,
+// yesterday's pivot point, and Korean market hours (09:00–15:30 Seoul) shaded.
+indicator({ name: 'Session VWAP', overlay: true })
+const anchor = input.select('Start over', ['D', 'W', 'M'], 'D')
+const v1 = ta.vwapbands(hlc3, anchor, 1)
+const v2 = ta.vwapbands(hlc3, anchor, 2)
+plot('VWAP', v1.vwap, { color: color.blue, width: 2 })
+plot('+1σ', v1.upper, { color: color.alpha(color.blue, 0.6) })
+plot('-1σ', v1.lower, { color: color.alpha(color.blue, 0.6) })
+plot('+2σ', v2.upper, { color: color.alpha(color.blue, 0.3), lineStyle: 'dashed' })
+plot('-2σ', v2.lower, { color: color.alpha(color.blue, 0.3), lineStyle: 'dashed' })
+fill('+1σ', '-1σ', { color: color.alpha(color.blue, 0.06) })
+
+const pv = ta.pivots('traditional', 'D')
+plot('Pivot', pv.p, { color: color.gray, style: 'step', lineStyle: 'dotted' })
+
+if (timeframe.isIntraday) bgcolor(date.session('0900-1530', 'Asia/Seoul'), { color: color.alpha(color.yellow, 0.06) })
+plotshape(date.isNew('D'), { shape: 'circle', location: 'bottom', color: color.gray, size: 'tiny' })
 ```

@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.2.0
+
+- **32 more `ta.*` indicators**: `vwap` / `vwapbands` (starting over each day, week, month, year in
+  the market's time zone, or at a condition), `sar`, `kc` / `kcw` / `bbw`, `wpr`, `cmo`, `tsi`,
+  `cog`, `rci`, `swma`, `median`, `mode`, `percentile`, `percentrank`, `range`, `dev`, `variance`,
+  `correlation`, `highestbars` / `lowestbars` (bars back, positive), `max` / `min` (so far),
+  `accdist`, `pvt`, `nvi`, `pvi`, `wad`, `wvad`, `iii`, `pivots` (traditional, fibonacci, woodie,
+  classic, camarilla) and `ichimoku`. Window statistics stay fast on long windows (a sorted window).
+- **Market, interval, time**: `syminfo` (symbol, exchange, spot / perp / stock, currency, price step,
+  time zone), `timeframe`, `bar.index` / `bar.last` / `bar.confirmed`, and `date.hour`, `minute`,
+  `dayofweek`, `day`, `month`, `year`, `isNew`, `session` — in the market's zone (crypto UTC) unless
+  one is given. Hosts pass them as `RunOptions.symbol`, `timeframe`, `confirmed`.
+- **Inputs**: `input.timeframe`, `input.symbol`, `input.time`.
+- **Strategies**: take profit in parts (`takeProfit: [{ at: 2, close: 50 }, { at: 5 }]`),
+  `breakEven`, `exitAfter` (a time exit), entry orders at a price (`entryPrice`, `entryBars`: a limit
+  below the signal bar's close for a long, a breakout stop above it), `pyramiding`, `leverage` (with
+  liquidation; fees on the leveraged value), `amount` / `qty` instead of `size`. The live rules
+  (`live.ts`) follow them too and are tested to trade like the backtest.
+- **Backtest results**: monthly returns (`monthly`, in `BacktestOptions.timezone`), each exit's share
+  of the position (`part`) and the entries in it (`entries`), `leverage`; new exit reasons `time` and
+  `liquidation`. Short exits now pay the fee on the value at the exit (was: on what was left).
+- **Security (the realm a script runs in)**: typed arrays and buffers now count against a limit
+  (256 MB at once, 2 GB a run) — they live outside the JavaScript heap limit, so a script could
+  take the machine's memory; WebAssembly, SharedArrayBuffer and Atomics are removed. For v2
+  scripts the realm's clock and randomness are refused too (`globalThis.Math.random()`,
+  `new (new Date(0).constructor)()`, `Intl…format()` with no date, `performance`, `crypto`), not
+  only the names in the script's scope. Installed by the bundled runtime (`./worker`) only.
+- **CLI · MCP**: runs tell the script its market and interval; backtest summaries add monthly
+  returns, leverage and partial exits.
+- Examples `15-scale-out.js` and `16-session-vwap.js`.
+
 ## 0.1.3
 
 - **Showcase**: the long example is now `showcase/ma-bundle-sr.js` ("이평선 묶음 + 지지 · 저항"),

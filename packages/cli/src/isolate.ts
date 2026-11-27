@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { Bars, InputValues, Locale, RequestData, RunResult } from '@funnest/script';
+import type { Bars, InputValues, Locale, RequestData, RunResult, SymbolContext } from '@funnest/script';
 import { SCRIPT_WORKER_SOURCE } from '@funnest/script/worker';
 
 /**
@@ -68,7 +68,14 @@ const failure = (locale: Locale, timeout: boolean, detail: string, timeoutMs: nu
   requests: [],
 });
 
-export function runIsolated(code: string, bars: Bars, inputs: InputValues = {}, locale: Locale = 'ko', timeoutMs = TIMEOUT_MS, requests?: RequestData): RunResult {
+/** Where the bars come from (syminfo, timeframe, bar.confirmed). */
+export interface RunWhere {
+  symbol?: SymbolContext;
+  timeframe?: string;
+  confirmed?: boolean;
+}
+
+export function runIsolated(code: string, bars: Bars, inputs: InputValues = {}, locale: Locale = 'ko', timeoutMs = TIMEOUT_MS, requests?: RequestData, where?: RunWhere): RunResult {
   const file = childPath();
   // Requested data: its arrays tagged like the bars.
   const req = requests ? JSON.parse(JSON.stringify(requests, (_k, v) => (v instanceof Float64Array ? f64(v) : v))) : undefined;
@@ -78,6 +85,7 @@ export function runIsolated(code: string, bars: Bars, inputs: InputValues = {}, 
     locale,
     bars: { open: f64(bars.open), high: f64(bars.high), low: f64(bars.low), close: f64(bars.close), volume: f64(bars.volume), time: f64(bars.time), turnover: f64(bars.turnover) },
     requests: req,
+    where: where ?? null,
   };
   const r = spawnSync(process.execPath, [...permissionFlags(file), `--max-old-space-size=${HEAP_MB}`, file], {
     input: JSON.stringify({ runtime: SCRIPT_WORKER_SOURCE, job, timeoutMs }),

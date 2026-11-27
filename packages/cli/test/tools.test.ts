@@ -36,7 +36,7 @@ describe('CLI / MCP tools (no network)', () => {
     expect(getFunction('ta.ema(close, 20)')?.name).toBe('ta.ema');
     expect(getFunction('nope')).toBeNull();
     expect(findExamples('macd').map((e) => e.file)).toEqual(['04-macd.js']);
-    expect(findExamples().length).toBe(14);
+    expect(findExamples().length).toBe(16);
     expect(listFunctions('ko').length).toBeGreaterThan(5);
   });
 });

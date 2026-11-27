@@ -141,7 +141,9 @@ export async function main(argv: string[]): Promise<number> {
           console.log(`✓ ${b.trades} trades · return ${b.totalReturnPct}% (buy & hold ${b.buyHoldPct}%) · win rate ${b.winRatePct ?? '—'}% · max drawdown ${b.maxDrawdownPct}% · profit factor ${b.profitFactor ?? '—'}`);
           console.log(`  avg win ${b.avgWinPct ?? '—'}% · avg loss ${b.avgLossPct ?? '—'}% · payoff ${b.payoff ?? '—'} · losing streak ${b.maxLosingStreak} · exposure ${b.exposurePct}% · final ${b.finalEquity}`);
           console.log(`  long ${b.long.trades} (${b.long.returnPct}%) · short ${b.short.trades} (${b.short.returnPct}%) · exits ${Object.entries(b.exits).map(([k, v]) => `${k} ${v}`).join(', ')}`);
-          for (const t of b.recentTrades) console.log(`  ${t.side} ${t.entry} → ${t.exit} ${t.returnPct}% ${t.reason}${t.open ? ' (open)' : ''}`);
+          if (b.leverage > 1) console.log(`  leverage ${b.leverage}x`);
+          if (b.monthly.length > 1) console.log(`  monthly ${b.monthly.map((m) => `${m.month} ${m.returnPct}%`).join(' · ')}`);
+          for (const t of b.recentTrades) console.log(`  ${t.side} ${t.entry} → ${t.exit} ${t.returnPct}% ${t.reason}${t.partPct < 100 ? ` (${t.partPct}% of it)` : ''}${t.entries > 1 ? ` [${t.entries} entries]` : ''}${t.open ? ' (open)' : ''}`);
         }
       }
       return r.result.ok && r.backtest ? 0 : 1;
