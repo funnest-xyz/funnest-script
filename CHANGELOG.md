@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.1
+
+- **Security**: the memory count in the script's realm couldn't be dodged before, now it can't
+  either way we tried: copies made through a changed `constructor` (slice, map, filter, toSorted…,
+  ArrayBuffer slice / transfer) are counted by the engine's own lengths, and sizes are read once
+  (a `valueOf` or `length` getter could say one thing to the count and another to the engine).
+  Worker, Blob, structuredClone, ImageData, OffscreenCanvas, TextEncoder and Response are removed
+  from the realm; `performance` and `crypto` are removed from its whole prototype chain (a Worker
+  keeps them on WorkerGlobalScope.prototype).
+- **CLI · MCP**: a run's result is checked before it's read (a script could replace JSON.stringify
+  in its realm and hand back any shape, which crashed the tools); a backtest that can't read a
+  strategy is skipped instead of throwing.
+
 ## 0.2.0
 
 - **32 more `ta.*` indicators**: `vwap` / `vwapbands` (starting over each day, week, month, year in

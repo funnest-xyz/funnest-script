@@ -1,6 +1,6 @@
 {
   "name": "@funnest/script",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Funnest Script v2: a JavaScript language for trading indicators and strategies — runtime, backtest, live trading rules and machine-readable docs for AI",
   "keywords": [
     "trading",

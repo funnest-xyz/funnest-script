@@ -67,6 +67,36 @@ describe('a script cannot reach the machine it runs on', () => {
     expect(logsOf(`log(ta.sma(close, 5).map((v) => v * 2).slice(-1)[0] > 0, new Float64Array(new ArrayBuffer(16)).length)`)[0]).toBe('true 2');
   }, 120_000);
 
+  it('the memory count cannot be dodged: copies through a changed constructor, sizes that change when read twice', () => {
+    for (const code of [
+      // Copies made with `constructor` pointed away from the counted one (species).
+      "const a = new Float64Array(2 ** 25); Object.defineProperty(a, 'constructor', { value: undefined }); const keep = []; for (let k = 0; k < 12; k++) keep.push(a.slice())",
+      "const a = new Float64Array(2 ** 25); Object.defineProperty(a, 'constructor', { value: undefined }); const keep = []; for (let k = 0; k < 12; k++) keep.push(a.map((x) => x))",
+      "const b = new ArrayBuffer(2 ** 28); Object.defineProperty(b, 'constructor', { value: undefined }); const keep = []; for (let k = 0; k < 12; k++) keep.push(b.slice(0))",
+      // A size that says 0 to the count and 2 GB to the engine.
+      'let n = 0; const keep = []; for (let k = 0; k < 12; k++) keep.push(new ArrayBuffer({ valueOf() { return n++ % 2 ? 2 ** 28 : 2 ** 28 } }))',
+      'const keep = []; for (let k = 0; k < 12; k++) { const b = new ArrayBuffer(8); keep.push(b.transfer({ valueOf: () => 2 ** 28 })) }',
+      // An object dressed as a buffer (not a view: an array-like with a huge length).
+      'const fake = Object.create(ArrayBuffer.prototype); fake.length = 2 ** 30; new Float64Array(fake)',
+    ]) {
+      const r = runIsolated(head + code, sampleBars(20), {}, 'en', 10_000);
+      expect(r.ok, code).toBe(false);
+      if (!r.ok) expect(r.error, code).toMatch(/too much memory/);
+    }
+    // Lengths that change between reads are read once.
+    expect(logsOf(`let n = 0, m = 0; log(new Float64Array({ get length() { return n++ ? 2 ** 28 : 3 } }).length, new ArrayBuffer({ valueOf: () => (m++ ? 2 ** 31 : 16) }).byteLength)`)[0]).toBe('3 16');
+    // Allocating globals that can't be counted aren't there.
+    expect(logsOf(`log(typeof Worker, typeof Blob, typeof structuredClone, typeof TextEncoder)`)[0]).toBe('undefined undefined undefined undefined');
+  }, 180_000);
+
+  it('a result the script forged is refused, and the tools do not crash on it', () => {
+    const forged = `JSON.stringify = () => '{"ok":true,"version":2,"plots":5,"logs":"x"}'`;
+    const r = runIsolated(head + forged, sampleBars(20), {}, 'en');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/malformed/);
+    expect(() => checkScript(head + forged, 'en')).not.toThrow();
+  });
+
   it('no clock or dice through the global object either', () => {
     for (const code of [
       'globalThis.Math.random()',

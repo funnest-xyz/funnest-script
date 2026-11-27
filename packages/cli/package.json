@@ -1,6 +1,6 @@
 {
   "name": "@funnest/script-cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Funnest Script from the terminal: type-check and test-run scripts, run them on real exchange bars, backtest strategies, read the docs",
   "keywords": [
     "trading",

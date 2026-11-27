@@ -155,7 +155,13 @@ const pct = (v: number | null) => (v === null ? null : Number((v * 100).toFixed(
 export function backtestSummary(r: RunResult, bars: Bars, options?: BacktestOptions): BacktestSummary | null {
   if (!r.ok || !r.strategy) return null;
   const list = Array.from({ length: bars.close.length }, (_, i) => ({ time: bars.time[i]!, open: bars.open[i]!, high: bars.high[i]!, low: bars.low[i]!, close: bars.close[i]! }));
-  const b: BacktestResult = backtest(list, r.strategy, options);
+  let b: BacktestResult;
+  try {
+    b = backtest(list, r.strategy, options);
+  } catch {
+    // A strategy the checks let through but the backtest can't read: no backtest rather than a crash.
+    return null;
+  }
   return {
     trades: b.trades.length,
     totalReturnPct: pct(b.totalReturn)!,

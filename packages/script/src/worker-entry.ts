@@ -10,7 +10,7 @@
  */
 // First: the memory guard has to be in place before the runtime's classes extend typed arrays.
 import { GUARDED } from './guard-install';
-import { hardenClock } from './guard';
+import { hardenClock, realmBlob } from './guard';
 import { execute, isV2, transferables, type Compile, type RunOptions } from './runtime';
 import type { Bars } from './lib';
 
@@ -26,10 +26,10 @@ try {
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const compileAsScript: Compile | undefined =
-  load && typeof Blob === 'function' && typeof URL?.createObjectURL === 'function'
+  load && realmBlob && typeof URL?.createObjectURL === 'function'
     ? (names, body) => {
         // Line 1 is the function's head, so the script's line k is the blob's line k + 1 + 1 ("use strict").
-        const url = URL.createObjectURL(new Blob([`self.__funnestFn = function (${names.join(', ')}) {\n${body}\n};\n`], { type: 'text/javascript' }));
+        const url = URL.createObjectURL(new realmBlob!([`self.__funnestFn = function (${names.join(', ')}) {\n${body}\n};\n`], { type: 'text/javascript' }));
         try {
           load(url);
         } finally {

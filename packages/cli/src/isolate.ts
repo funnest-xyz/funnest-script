@@ -99,8 +99,44 @@ export function runIsolated(code: string, bars: Bars, inputs: InputValues = {}, 
   const timedOut = (r.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT' || /timed out/i.test(r.stderr ?? '');
   if (r.status !== 0 || !r.stdout) return failure(locale, timedOut, (r.stderr || String(r.error ?? 'the run failed')).split('\n').find((l) => l.trim()) ?? 'the run failed', timeoutMs);
   try {
-    return revive(JSON.parse(r.stdout)) as RunResult;
+    const result = revive(JSON.parse(r.stdout));
+    // The script ran in there and could have changed what was written out: check it like any input.
+    return wellFormed(result, bars.close.length) ? result : failure(locale, false, 'the run gave back a malformed result', timeoutMs);
   } catch {
     return failure(locale, false, 'the run gave back no result', timeoutMs);
   }
+}
+
+/**
+ * A result as the runtime makes it: the script runs in the same realm as the code that writes the
+ * result out, so it could replace JSON.stringify (or anything else) and hand back any shape. What
+ * reads the result (summaries, the MCP server) relies on these types and lengths.
+ */
+export function wellFormed(v: unknown, n: number): v is RunResult {
+  const o = v as Record<string, unknown> | null;
+  if (!o || typeof o !== 'object' || o.version !== 2 || typeof o.ok !== 'boolean') return false;
+  const str = (x: unknown) => typeof x === 'string';
+  const num = (x: unknown) => typeof x === 'number';
+  const list = (x: unknown, each: (y: Record<string, unknown>) => boolean, max = 10_000) =>
+    Array.isArray(x) && x.length <= max && x.every((y) => y !== null && typeof y === 'object' && each(y as Record<string, unknown>));
+  const series = (x: unknown) => x instanceof Float64Array && x.length === n;
+  const bits = (x: unknown) => x === null || x === undefined || (x instanceof Uint8Array && x.length === n);
+  const requests = list(o.requests, (q) => str(q.key) && (q.kind === 'bars' || q.kind === 'data'), 64);
+  if (!o.ok) return str(o.code) && str(o.error) && (o.hint === null || str(o.hint)) && (o.line === null || num(o.line)) && requests;
+  const meta = o.meta as Record<string, unknown> | null;
+  if (!meta || typeof meta !== 'object' || !str(meta.name) || typeof meta.overlay !== 'boolean') return false;
+  const strategy = o.strategy as Record<string, unknown> | null;
+  const strategyOk =
+    strategy === null ||
+    (typeof strategy === 'object' && ['longEntry', 'longExit', 'shortEntry', 'shortExit'].every((k) => bits(strategy[k])) && num(strategy.size) && num(strategy.capital) && typeof strategy.reverse === 'boolean');
+  return (
+    requests &&
+    strategyOk &&
+    list(o.plots, (p) => str(p.name) && series(p.values), 100) &&
+    ['hlines', 'fills', 'shapes', 'backgrounds', 'labels', 'lines', 'boxes', 'tables', 'inputs'].every((k) => list(o[k], () => true, 2_000)) &&
+    list(o.alerts, (a) => str(a.message) && a.when instanceof Uint8Array && a.when.length === n, 50) &&
+    list(o.screens, (c) => str(c.name) && num(c.value), 50) &&
+    list(o.warnings, (w) => str(w.code) && str(w.message), 100) &&
+    Array.isArray(o.logs) && o.logs.length <= 100 && o.logs.every(str)
+  );
 }

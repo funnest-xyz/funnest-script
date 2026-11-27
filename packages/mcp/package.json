@@ -1,6 +1,6 @@
 {
   "name": "@funnest/script-mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MCP server for Funnest Script: AI tools (Claude, Cursor, …) read the docs, check scripts, run them on real bars and backtest strategies",
   "keywords": [
     "mcp",
